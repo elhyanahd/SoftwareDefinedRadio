@@ -28,15 +28,17 @@ architecture Behavioral of bclk_divider is
 begin
     process (clk)
     begin
-        if (resetn = '0') then
-            counter <= 0;
-            bclk_out <= '0';
-        else
-            if(counter = MAX - 1) then
-                bclk_out <= not(bclk_out);
+        if(rising_edge(clk)) then
+            if (resetn = '0') then
                 counter <= 0;
+                bclk_out <= '0';
             else
-                counter <= counter + 1;
+                if(counter = MAX - 1) then
+                    bclk_out <= not(bclk_out);
+                    counter <= 0;
+                else
+                    counter <= counter + 1;
+                end if;
             end if;
         end if;
     end process;

@@ -28,15 +28,17 @@ architecture Behavioral of lrclk_divider is
 begin
     process (clk)
     begin
-        if (resetn = '0') then
-            counter <= 0;
-            lrclk_out <= '0';
-        else
-            if(counter = MAX - 1) then
-                lrclk_out <= not(lrclk_out);
+        if(rising_edge(clk))then
+            if (resetn = '0') then
                 counter <= 0;
+                lrclk_out <= '0';
             else
-                counter <= counter + 1;
+                if(counter = MAX - 1) then
+                    lrclk_out <= not(lrclk_out);
+                    counter <= 0;
+                else
+                    counter <= counter + 1;
+                end if;
             end if;
         end if;
     end process;

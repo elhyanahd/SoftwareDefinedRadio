@@ -17,7 +17,7 @@ end dac_intf_tb;
 
 architecture Behavioral of dac_intf_tb is
     signal clk : std_logic := '0';
-    signal resetn : std_logic := '1';
+    signal resetn : std_logic := '0';
     
     -- Internal signals for monitoring (exposed from architecture via waveform)
     signal lrclk        : std_logic;
@@ -35,9 +35,7 @@ begin
     -- active-low reset  
     reset : process
 	begin
-	   wait for 10ns;
-	   resetn <= '0';
-	   wait for 10ns;
+	   wait for 100 ms;
 	   resetn <= '1';
 	   wait;
 	end process;

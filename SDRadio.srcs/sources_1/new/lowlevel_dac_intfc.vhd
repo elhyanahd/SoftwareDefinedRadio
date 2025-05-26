@@ -56,11 +56,20 @@ begin
                 latched_data <= '0';
                 bit_val <= 31;
                 bclk_prev <= '0';
+                sdata <= '0';
             else
-                -- At every falling edge of bclk, update the bit_val.
-                -- When bit_val is low, assert latched_data so that 
-                -- sdata can output new data when bit_val returns to 31 
-                if(bclk_prev = '1' and bclk_out = '0') then                    
+                -- At every falling edge of bclk, update the bit_val
+                -- and sdata.
+                if(bclk_prev = '1' and bclk_out = '0') then  
+                    -- Updated sdata will show on next clock cycle
+                    -- Displaying the following sequence:
+                    -- LRCLK = 0 => Index 31 to 17 or 0
+                    -- LRCLK = 1 => Index 16 to 1
+                    sdata <= data_word(bit_val);
+                    
+                    -- When bit_val is 0, assert latched_data so that 
+                    -- sdata can output new data when bit_val returns 
+                    -- to 31.                                      
                     if (bit_val = 0) then
                         bit_val <= 31;
                         latched_data <= '1';
@@ -76,8 +85,7 @@ begin
             end if;
         end if;
     end process;
-    
-    sdata <= data_word(bit_val);        -- update sdata in the current clock cycle
+       
     bclk <= bclk_out;
     mclk <= mclk_out;
     lrclk <= lrclk_out;
