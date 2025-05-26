@@ -1,13 +1,14 @@
 ---------------------------------------------------------------------------------- 
--- Engineer: 
+-- Engineer: E. Desir
 -- 
 -- Create Date: 05/24/2025 12:16:50 PM
 -- Module Name: lowlevel_dac_intfc - Behavioral
 -- Project Name: Software Defined Radio
 -- Target Devices: Zybo Z7 (Zynq - 7020 Development Board)
--- Description: 
--- 
--- 
+-- Description: This module respresents a DAC interface which generates 3 clock 
+--              signals (LRCLK, BCLK, MCLK), outputs each bit of data_word signal   
+--              for DAC starting with bit 31, and asserts a signal indicating when
+--              this module is prepared to receive and output new data.  
 ----------------------------------------------------------------------------------
 
 
@@ -54,40 +55,29 @@ begin
             if(resetn = '0') then
                 latched_data <= '0';
                 bit_val <= 31;
+                bclk_prev <= '0';
             else
-                if(bclk_prev = '1' and bclk_out = '0') then
-                    if(bit_val = 31) then
-                        bit_val <= bit_val - 1;
-                        latched_data <= '0';
-                    elsif (bit_val = 0) then
+                -- At every falling edge of bclk, update the bit_val.
+                -- When bit_val is low, assert latched_data so that 
+                -- sdata can output new data when bit_val returns to 31 
+                if(bclk_prev = '1' and bclk_out = '0') then                    
+                    if (bit_val = 0) then
                         bit_val <= 31;
                         latched_data <= '1';
                     else
-                        latched_data <= '0';
                         bit_val <= bit_val - 1;
+                        latched_data <= '0';
                     end if;
+                else
+                    latched_data <= '0';
                 end if;
                 
-                bclk_prev <= bclk_out;
+                bclk_prev <= bclk_out;  -- to help keep track of falling edges
             end if;
         end if;
     end process;
     
-    process(lrclk_out, bit_val)
-    begin
-        sdata <= '0';
-        
-        if (lrclk_out = '0') then
-            if(bit_val = 0 or bit_val > 16) then
-                sdata <= data_word(bit_val);
-            end if;             
-        else
-            if(bit_val >= 1 and bit_val < 17) then
-                sdata <= data_word(bit_val);
-            end if;
-        end if;
-    end process;
-
+    sdata <= data_word(bit_val);        -- update sdata in the current clock cycle
     bclk <= bclk_out;
     mclk <= mclk_out;
     lrclk <= lrclk_out;

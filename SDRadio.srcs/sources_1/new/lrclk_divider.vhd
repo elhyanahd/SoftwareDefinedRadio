@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------
--- Engineer: 
+-- Engineer: E. Desir
 -- 
 -- Create Date: 05/24/2025 01:48:07 PM
 -- Module Name: lrclk_divider - Behavioral
