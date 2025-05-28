@@ -34,20 +34,26 @@ architecture Behavioral of lowlevel_dac_intfc is
     signal bit_val : integer range 0 to 32;
 begin
 
-    bclk_gen : entity work.bclk_divider(Behavioral) 
+    -- BCLK instantiation (125 / 1.5625 MHz / 2)  = 40
+    bclk_gen : entity work.clk_divider(Behavioral) 
+               generic map (MAX => 40)
                port map (clk => clk,
                          resetn => resetn,
-                         bclk => bclk_out);
+                         div => bclk_out);
 
-    mclk_gen : entity work.mclk_divider(Behavioral) 
+    -- MCLK instantiation (125 / 12.5 MHz / 2)  = 5
+    mclk_gen : entity work.clk_divider(Behavioral) 
+               generic map (MAX => 5)
                port map (clk => clk,
                          resetn => resetn,
-                         mclk => mclk_out);    
+                         div => mclk_out);    
 
+    -- LRCLK instantiation (125 / 48.828125 kHz / 2)  = 1280
     lrclk_gen : entity work.lrclk_divider(Behavioral) 
+               generic map (MAX => 1280)
                port map (clk => clk,
                          resetn => resetn,
-                         lrclk => lrclk_out);
+                         div => lrclk_out);
 
     process (clk)
     begin
