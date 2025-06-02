@@ -16,7 +16,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 
 entity clk_divider is
-    Generic ( MAX : integer := 40 )
+    Generic ( MAX : integer := 40 );
     Port ( clk : in STD_LOGIC;
            resetn : in STD_LOGIC;
            div : out STD_LOGIC);

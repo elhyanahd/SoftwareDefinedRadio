@@ -15,18 +15,28 @@ end;
 
 architecture bench of lowlevel_dac_intfc_tb is
 
-component lowlevel_dac_intfc is 
-port (
-        resetn                : in std_logic; -- active low synchronous reset
-        clk              : in std_logic; -- the clock for all flops in your design
-        data_word           : in std_logic_vector(31 downto 0); -- 32 bit input data
-        sdata               : out std_logic; -- serial data out to the DAC
-        lrclk                : out std_logic;  -- a 50% duty cycle signal aligned as shown below
-        bclk                : out std_logic; -- the dac clocks sdata on the rising edge of this clock
-        mclk                : out std_logic; -- a 12.5MHz clock output with arbitrary phase
-        latched_data        : out std_logic -- 1 clock wide pulse which indicates when you should change data_word
-       );
-end component;
+    component lowlevel_dac_intfc is 
+    port (
+            resetn                : in std_logic; -- active low synchronous reset
+            clk              : in std_logic; -- the clock for all flops in your design
+            data_word           : in std_logic_vector(31 downto 0); -- 32 bit input data
+            sdata               : out std_logic; -- serial data out to the DAC
+            lrclk                : out std_logic;  -- a 50% duty cycle signal aligned as shown below
+            bclk                : out std_logic; -- the dac clocks sdata on the rising edge of this clock
+            mclk                : out std_logic; -- a 12.5MHz clock output with arbitrary phase
+            latched_data        : out std_logic -- 1 clock wide pulse which indicates when you should change data_word
+           );
+    end component;
+    
+    component wave_generator is 
+    port (
+            clk              : in std_logic; -- the clock for all flops in your design
+            resetn                : in std_logic; -- active low synchronous reset
+            latched_data        : in std_logic; -- 1 clock wide pulse which indicates when you should change data_word
+            data_word           : out std_logic_vector(31 downto 0) -- 32 bit input datadata_word
+           );
+    end component;
+
 
   signal resetn: std_logic;
   signal clk125: std_logic;
@@ -57,15 +67,18 @@ begin
   end process stimulus;
 
 
-clkmaker : process
-begin
-   clk125 <= '0';
-   wait for 4 ns;
-   clk125 <= '1';
-   wait for 4 ns;
-end process clkmaker;
+    clkmaker : process
+    begin
+       clk125 <= '0';
+       wait for 4 ns;
+       clk125 <= '1';
+       wait for 4 ns;
+    end process clkmaker;
 
-data_word <= std_logic_vector(unsigned(data_word)+1) when rising_edge(clk125) and latched_data='1';
-
+--data_word <= std_logic_vector(unsigned(data_word)+1) when rising_edge(clk125) and latched_data='1';
+    uut2: wave_generator port map ( resetn => resetn,
+                                    clk       => clk125,
+                                     data_word    => data_word,
+                                     latched_data => latched_data );
 
 end bench;
