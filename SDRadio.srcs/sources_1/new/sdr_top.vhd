@@ -44,7 +44,7 @@ entity sdr_top is
            btn : in STD_LOGIC_VECTOR(0 downto 0);
            sw  : in STD_LOGIC_VECTOR(3 downto 0);
            led : out STD_LOGIC_VECTOR(3 downto 0);
-           ac_reclrc : out std_logic;
+           --ac_reclrc : out std_logic;
            ac_muten : out STD_LOGIC;
            ac_bclk : out std_logic;
            ac_mclk : out std_logic;
@@ -131,7 +131,8 @@ architecture Behavioral of sdr_top is
             probe6 : in std_logic;
             probe7 : in std_logic;
             probe8 : in std_logic;
-            probe9 : in std_logic);
+            probe9 : in std_logic;
+            probe10 : in std_logic_vector(3 downto 0));
       end component;
 begin
     -- connecting external pins to local signals
@@ -209,7 +210,7 @@ begin
       ac_bclk <= bclk;
       ac_mclk <= mclk;
       ac_pblrc <= lrclk;
-      ac_reclrc <= lrclk;
+      --ac_reclrc <= lrclk;
       ac_sda <= hdmi_in_ddc_sda_io;
       ac_scl <= hdmi_in_ddc_scl_io;
       ac_pbdat <= sdata;
@@ -227,5 +228,6 @@ begin
             probe6 => hdmi_in_ddc_scl_o,
             probe7 => hdmi_in_ddc_scl_i,
             probe8 => hdmi_in_ddc_sda_o,
-            probe9 => hdmi_in_ddc_sda_i);  
+            probe9 => hdmi_in_ddc_sda_i,
+            probe10 => sw);  
 end Behavioral;
