@@ -44,7 +44,6 @@ entity sdr_top is
            btn : in STD_LOGIC_VECTOR(0 downto 0);
            sw  : in STD_LOGIC_VECTOR(3 downto 0);
            led : out STD_LOGIC_VECTOR(3 downto 0);
-           ac_recdat : in std_logic;
            ac_reclrc : out std_logic;
            ac_muten : out STD_LOGIC;
            ac_bclk : out std_logic;
@@ -118,6 +117,22 @@ architecture Behavioral of sdr_top is
         hdmi_in_ddc_sda_o : out STD_LOGIC;
         hdmi_in_ddc_sda_t : out STD_LOGIC);
       end component lab2_proc_system;
+      
+      -- component for ILA
+      component ila_0
+        port (
+            clk : in std_logic;
+            probe0 : in std_logic_vector(31 downto 0);
+            probe1 : in std_logic;
+            probe2 : in std_logic;
+            probe3 : in std_logic;
+            probe4 : in std_logic;
+            probe5 : in std_logic;
+            probe6 : in std_logic;
+            probe7 : in std_logic;
+            probe8 : in std_logic;
+            probe9 : in std_logic);
+      end component;
 begin
     -- connecting external pins to local signals
     clk <= CLK125MHZ;
@@ -198,4 +213,19 @@ begin
       ac_sda <= hdmi_in_ddc_sda_io;
       ac_scl <= hdmi_in_ddc_scl_io;
       ac_pbdat <= sdata;
+      
+      --ILA Instance
+      ila_inst : ila_0
+        port map (
+            clk => clk,
+            probe0 => data_word,
+            probe1 => sdata,
+            probe2 => lrclk,
+            probe3 => bclk,
+            probe4 => mclk,
+            probe5 => latched_data,
+            probe6 => hdmi_in_ddc_scl_o,
+            probe7 => hdmi_in_ddc_scl_i,
+            probe8 => hdmi_in_ddc_sda_o,
+            probe9 => hdmi_in_ddc_sda_i);  
 end Behavioral;
