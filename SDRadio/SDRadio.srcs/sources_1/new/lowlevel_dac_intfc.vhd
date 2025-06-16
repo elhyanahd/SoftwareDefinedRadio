@@ -30,9 +30,9 @@ entity lowlevel_dac_intfc is
 end lowlevel_dac_intfc;
 
 architecture Behavioral of lowlevel_dac_intfc is
-    signal lacthed_word : std_logic_vector(31 downto 0);
+    signal lacthed_word : std_logic_vector(31 downto 0) := x"00000000";
     signal lrclk_out, bclk_prev, bclk_out, mclk_out : std_logic;
-    signal bit_val : integer range 0 to 31;
+    signal bit_val : integer range 0 to 31 := 31;
 begin
 
     -- BCLK instantiation (125 / 1.5625 MHz / 2)  = 40
@@ -63,7 +63,7 @@ begin
                 latched_data <= '0';
                 bit_val <= 31;
                 bclk_prev <= '0';
-                sdata <= '0';
+                sdata <= data_word(bit_val);
             else
                 -- At every falling edge of bclk, update the bit_val
                 -- and sdata.
