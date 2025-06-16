@@ -33,6 +33,8 @@
 
 static u32 sampleData [4096];
 static u32 sampleSize;
+static const int32_t data_6hz[8] = {0, 7070, 10000, 7070, 0, -7070, -10000, -7070};  
+
 
 /*
  * @brief: Helper function used to write specific
@@ -85,36 +87,11 @@ void setVolume(u16 volume)
 }
 
 /*
- * @brief: Cycle through 6.103 kHz sample points
- *         and send data to AXI FIFO. 
- */
-void waveGenerator()
-{
-    // static variable to maintain state across calls
-    static int counter = 0;
-    static const int32_t data_word[8] = {0, 7070, 10000, 7070, 0, -7070, -10000, -7070};
-
-    u32 vacancy = 0x0;
-    int32_t word = data_word[counter]; 
-
-    //block until FIFO is free
-    do  {   vacancy = XLlFifo_ReadReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFV_OFFSET); }
-    while (vacancy < sizeof(word));
-
-    //write word and word size to FIFO
-    XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFD_OFFSET, word);
-    XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TLF_OFFSET, sizeof(word));
-    counter = (counter + 1) % 8;  // Ensures cycling without if statements
-}
-
-
-/*
  * @brief: 
  */
-void writeToFIFO(int counter)
+void writeToFIFO(int32_t word)
 {
     u32 vacancy = 0x0;
-    int32_t word = sampleData[counter];
     
     //block until FIFO is free
     do  {   vacancy = XLlFifo_ReadReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFV_OFFSET); }
@@ -202,9 +179,14 @@ int main()
     print("\n\rName: Elhyanah Desir\n\r"); 
     print("Calling configureCodec()...\n\r");  
     configureCodec(); 
+    
     print("Playing ~6kHz tone for 5 seconds...\n\r");
+    int counter = 0;  
     for(int i = 0; i < 200000; i++)
-    {   waveGenerator();    }
+    {   
+        writeToFIFO(data_6hz[counter]);   
+        counter = (counter + 1) % 8; 
+    }
     
     print("Welcome to audio playback system.\n\r"); 
     print("\tpress L to load a file.\n\r");
@@ -232,7 +214,7 @@ int main()
                     int count = 0;
                     while(stopped == 0)
                     {   
-                        writeToFIFO(count);  
+                        writeToFIFO(sampleData[count]);  
                         count = (count + 1) % (int)sampleSize;    
 
                         if(XUartPs_IsReceiveData(XPAR_XUARTPS_0_BASEADDR))  
@@ -247,16 +229,25 @@ int main()
                 case 'S':
                     print("Playing sound once.\n\r");
                     for(int i = 0; i < (int)sampleSize; i++)
-                    {   writeToFIFO(i);  }
+                    {   writeToFIFO(sampleData[i]);  }
                     break;
 
+                // Cycle through 6.103 kHz sample points
+                // for 2 seconds
                 case 'B':
-                    print("Playing beep ....");                    
+                    print("Playing beep ...."); 
+                    int counter = 0;                   
                     for(int i = 0; i < 50000; i++)
-                    {   waveGenerator();    }
+                    {   
+                        writeToFIFO(data_6hz[counter]);   
+                        counter = (counter + 1) % 8;    
+                    }
                     print("Done.\n\r");
                     break;
 
+                // Debug Only: 
+                // Cycle through loaded file samples array
+                // and print each 32-bit sample
                 case 'P':
                     for(int i = 0; i < (int)sampleSize; i++)
                     {   printf("%08x\n", sampleData[i]); }
