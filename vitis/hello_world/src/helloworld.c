@@ -31,8 +31,8 @@
 #include "sleep.h"
 
 
-static u32 sampleData [4096];
-static u32 sampleSize;
+static int32_t sampleData [4096];
+static int sampleSize;
 static const int32_t data_6hz[8] = {0, 7070, 10000, 7070, 0, -7070, -10000, -7070};  
 
 
@@ -106,7 +106,7 @@ void writeToFIFO(int32_t word)
  *         in little edian format (first value LSB). Returns
  *         32-bit value. 
  */
-u32 receiveFileData() 
+int32_t receiveFileData() 
 {
     u32 data = 0;
 
@@ -121,7 +121,7 @@ u32 receiveFileData()
         }
     }
 
-    return data;
+    return (int32_t)data;
 }
 
 /*
@@ -132,20 +132,20 @@ u32 receiveFileData()
 void loadFile()
 {
     int loaded = 0;
-    u32 size = 0;
+    int size = 0;
 
     int i = 0;
     while (loaded == 0)
     {
         //retrieve 32 bit word
-        u32 byte = receiveFileData();   
+        int32_t byte = receiveFileData();   
 
         //If the word is the first 32-bit value
         //then store as size, else add to global 
         //array until sample size reached.
         if (size == 0)
         {   
-            size = byte;
+            size = (int)byte;
             continue;    
         }
         else 
@@ -155,7 +155,7 @@ void loadFile()
         }
 
         //End loop once sample size reached.
-        if((u32)i == size)
+        if(i == size)
         {   loaded = 1; }
     }
 
@@ -203,11 +203,14 @@ int main()
         
             switch(c)
             {
+                // Load ".dat" file data and store globally
                 case 'L':
                     print("Please load/send file through terminal client.\n\r");
                     loadFile();                
                     break;
 
+                // Play the loaded sample bytes in a loop
+                // until a key is pressed.
                 case 'C':
                     print("Playing sound continously. Press any key to stop.\n\r");
                     int stopped = 0;
@@ -215,7 +218,7 @@ int main()
                     while(stopped == 0)
                     {   
                         writeToFIFO(sampleData[count]);  
-                        count = (count + 1) % (int)sampleSize;    
+                        count = (count + 1) % sampleSize;    
 
                         if(XUartPs_IsReceiveData(XPAR_XUARTPS_0_BASEADDR))  
                         { 
@@ -226,9 +229,10 @@ int main()
                     }
                     break;
                 
+                // Play the loaded sample bytes once
                 case 'S':
                     print("Playing sound once.\n\r");
-                    for(int i = 0; i < (int)sampleSize; i++)
+                    for(int i = 0; i < sampleSize; i++)
                     {   writeToFIFO(sampleData[i]);  }
                     break;
 
@@ -249,7 +253,7 @@ int main()
                 // Cycle through loaded file samples array
                 // and print each 32-bit sample
                 case 'P':
-                    for(int i = 0; i < (int)sampleSize; i++)
+                    for(int i = 0; i < sampleSize; i++)
                     {   printf("%08x\n", sampleData[i]); }
                     break;
 
