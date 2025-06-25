@@ -60,16 +60,16 @@ architecture Behavioral of sdr_top is
     signal clk, resetn : std_logic;
     signal switches    : std_logic_vector(3 downto 0);
     
-    -- signals from DAC Interface 
+    -- signals to/from DAC Interface 
     signal lrclk, bclk, mclk, latched_data, sdata : std_logic;
-    
-    -- signal from Sine Wave Generator
     signal dac_data_word : std_logic_vector(31 downto 0);
     signal dac_data_index_reg : integer range 0 to 31;
     signal dac_data_index : std_logic_vector(4 downto 0);
-    
-    -- signal for DC interface data (from AXI Stream)
     signal dac_data_valid : std_logic;
+    
+    -- signal to/from DDS Compiler
+    signal phase_increment : std_logic_vector(31 downto 0);
+    signal increment_valid, dds_ready : std_logic;
     
     -- signals for SCL and SDA IOBUFs 
     signal hdmi_in_ddc_scl_i : STD_LOGIC;
@@ -129,24 +129,33 @@ architecture Behavioral of sdr_top is
         M_AXIS_0_tdata : out STD_LOGIC_VECTOR ( 31 downto 0 ));
       end component lab2_proc_system;
       
+      -- component for DDS Compiler
+      component dds_compiler_0 
+        port (
+        aclk : IN STD_LOGIC;
+        aresetn : IN STD_LOGIC;
+        s_axis_phase_tvalid : IN STD_LOGIC;
+        s_axis_phase_tready : OUT STD_LOGIC;
+        s_axis_phase_tdata : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+        m_axis_data_tvalid : OUT STD_LOGIC;
+        m_axis_data_tready : IN STD_LOGIC;
+        m_axis_data_tdata : OUT STD_LOGIC_VECTOR(15 DOWNTO 0));
+      end component;
+      
       -- component for ILA
       component ila_0
         port (
             clk : in std_logic;
-            probe0 : in std_logic_vector(31 downto 0);
-            probe1 : in std_logic;
-            probe2 : in std_logic;
-            probe3 : in std_logic;
-            probe4 : in std_logic;
-            probe5 : in std_logic;
-            probe6 : in std_logic;
-            probe7 : in std_logic;
-            probe8 : in std_logic;
-            probe9 : in std_logic;
-            probe10 : in std_logic_vector(3 downto 0);
-            probe11 : in std_logic;
-            probe12 : in std_logic;
-            probe13 : in std_logic_vector(4 downto 0));
+            probe0 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
+            probe1 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
+            probe2 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
+            probe3 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
+            probe4 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
+            probe5 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
+            probe6 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
+            probe7 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
+            probe8 : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
+            probe9 : IN STD_LOGIC_VECTOR(15 DOWNTO 0));
       end component;
 begin
     -- connecting external pins to local signals
@@ -156,13 +165,6 @@ begin
            I => CLK125MHZ);
            
     resetn <= not(btn(0));
-    
-    -- Instance of Sine Wave Generator
---    sine_wave : entity work.wave_generator(Behavioral)
---                port map (clk => clk,
---                          resetn => resetn,
---                          latched_data => latched_data,
---                          data_word => data_word);
     
     -- Instance of DAC Interface
     dac_intfc : entity work.lowlevel_dac_intfc(Behavioral) 
@@ -200,9 +202,9 @@ begin
       FIXED_IO_ps_clk => FIXED_IO_ps_clk,
       FIXED_IO_ps_porb => FIXED_IO_ps_porb,
       FIXED_IO_ps_srstb => FIXED_IO_ps_srstb,
-      M_AXIS_0_tdata(31 downto 0) => dac_data_word,
-      M_AXIS_0_tready => latched_data,
-      M_AXIS_0_tvalid => dac_data_valid,
+      M_AXIS_0_tdata(31 downto 0) => phase_increment,
+      M_AXIS_0_tready => dds_ready,
+      M_AXIS_0_tvalid => increment_valid,
       hdmi_in_ddc_scl_i => hdmi_in_ddc_scl_i,
       hdmi_in_ddc_scl_o => hdmi_in_ddc_scl_o,
       hdmi_in_ddc_scl_t => hdmi_in_ddc_scl_t,
@@ -213,6 +215,17 @@ begin
       m_axis_aclk_0 => clk,
       m_axis_aresetn_0 => resetn,
       sws_4bits_tri_i(3 downto 0) => sw);
+      
+      wave_gen : dds_compiler_0
+      port map (
+        aclk => clk,
+        aresetn => resetn,
+        s_axis_phase_tvalid => increment_valid,
+        s_axis_phase_tready => dds_ready,
+        s_axis_phase_tdata => phase_increment,
+        m_axis_data_tvalid => dac_data_valid,
+        m_axis_data_tready => latched_data,
+        m_axis_data_tdata => dac_data_word(15 downto 0));
       
       -- IOBUF instances for SCL and SDA
       scl_iobuf: IOBUF
@@ -244,18 +257,14 @@ begin
       ila_inst : ila_0
         port map (
             clk => CLK125MHZ,
-            probe0 => dac_data_word,
-            probe1 => sdata,
-            probe2 => lrclk,
-            probe3 => bclk,
-            probe4 => mclk,
-            probe5 => latched_data,
-            probe6 => hdmi_in_ddc_scl_o,
-            probe7 => hdmi_in_ddc_scl_i,
-            probe8 => hdmi_in_ddc_sda_o,
-            probe9 => hdmi_in_ddc_sda_i,
-            probe10 => sw,
-            probe11 => dac_data_valid,
-            probe12 => resetn,
-            probe13 => dac_data_index);  
+            probe0 => phase_increment,
+            probe1(0) => sdata,
+            probe2(0) => lrclk,
+            probe3(0) => bclk,
+            probe4(0) => resetn,
+            probe5(0) => latched_data,
+            probe6(0) => dds_ready,
+            probe7(0) => increment_valid,
+            probe8(0) => dac_data_valid,
+            probe9 => dac_data_word(15 downto 0));  
 end Behavioral;

@@ -20,21 +20,19 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <ctype.h>
+#include "xil_printf.h"
 #include <xil_types.h>
 #include "platform.h"
 #include "xuartps_hw.h"        // R byte from Ps7 UART
 #include "xllfifo_hw.h"        // W AXI4 Stream FIFO
-#include "xil_printf.h"
 #include "xparameters.h"    // List of every peripheral in your system
 #include "xgpio_l.h"        // R/W GPIO
 #include "xiic_l.h"         // R/W I2C (IIC interface)
 #include "sleep.h"
 
-
-static int32_t sampleData [4096];
-static int sampleSize;
-static const int32_t data_6hz[8] = {0, 7070, 10000, 7070, 0, -7070, -10000, -7070};  
-
+static int32_t increment = 0;
+static int32_t frequency = 0; 
+static const int MAX = 100000000;
 
 /*
  * @brief: Helper function used to write specific
@@ -87,7 +85,7 @@ void setVolume(u16 volume)
 }
 
 /*
- * @brief: 
+ * @brief: Write given 32-bit to FIFO
  */
 void writeToFIFO(int32_t word)
 {
@@ -102,165 +100,174 @@ void writeToFIFO(int32_t word)
 }
 
 /*
- * @brief: Loops through loaded file and stores 4 bytes
- *         in little edian format (first value LSB). Returns
- *         32-bit value. 
+ * @brief: Set 32-bit value phase increment for input to DDS
+ *         based on current frequency. 
  */
-int32_t receiveFileData() 
-{
-    u32 data = 0;
-
-    for(int i = 0; i < 4; i++)
-    {
-        while (!XUartPs_IsReceiveData(XPAR_XUARTPS_0_BASEADDR)) {}  // Wait until a byte is received
-
-        if (XUartPs_IsReceiveData(XPAR_XUARTPS_0_BASEADDR)) 
-        {   
-            u8 byte = XUartPs_RecvByte(XPAR_XUARTPS_0_BASEADDR);   
-            data = (byte << 24) | (data >> 8); 
-        }
-    }
-
-    return (int32_t)data;
+void setPhaseIncrement() 
+{   
+    int64_t freqTemp = (int64_t)frequency;
+    int64_t result = (freqTemp * 134217728) / 125000000; 
+    increment = (int32_t)result; 
 }
 
 /*
- * @brief: Once 'L' is pressed, loop until all file 
- *         samples are received based on the first 
- *         32-bit number read.
+ *  @brief: Display new frequency and increment
  */
-void loadFile()
+void displayValues()
 {
-    int loaded = 0;
-    int size = 0;
-
-    int i = 0;
-    while (loaded == 0)
-    {
-        //retrieve 32 bit word
-        int32_t byte = receiveFileData();   
-
-        //If the word is the first 32-bit value
-        //then store as size, else add to global 
-        //array until sample size reached.
-        if (size == 0)
-        {   
-            size = (int)byte;
-            continue;    
-        }
-        else 
-        {
-            sampleData[i] = byte;
-            i++;
-        }
-
-        //End loop once sample size reached.
-        if(i == size)
-        {   loaded = 1; }
-    }
-
-    sampleSize = size;
-    printf("Successfully loaded %d audio samples!\n\r", size);
+    print("\n\r\tupdating frequency:\n\r");
+    printf("\tfreq\t= %d\n\r", frequency); 
+    printf("\tphase_inc = %d\n\r", increment);   
+    print("\n\r\n\r");
 }
 
 /*
- * @brief: Read switch values and write switch hex 
- *         value to the leds.
+ *  @brief: Display audio system menu
  */
-void setLeds()
+void displayMenu()
 {
-    u32 switch_val = XGpio_ReadReg(XPAR_DIPS_AND_LEDS_BASEADDR,XGPIO_DATA_OFFSET);
-    XGpio_WriteReg(XPAR_DIPS_AND_LEDS_BASEADDR, XGPIO_DATA2_OFFSET, switch_val);  
+    print("Welcome to audio system.\n\r"); 
+    print("\tPress 'f' to tune to a new frequency.\n\r");
+    print("\tPress 'U/u' to increase frequency by 1000/100 Hz.\n\r");
+    print("\tPress 'D/d' to decrease frequency by 1000/100 Hz.\n\r");
+    print("\tPress 'r' to reset the phase.\n\r");
+    print("\tPress [space] to repeat this menu.\n\r");    
+}
+
+/*
+ *  @brief: 
+ */
+void getFrequency()
+{
+    frequency = 0;
+    size_t lengthMax = 9;
+    size_t wordLength = 0;
+    char *word = (char *)malloc(lengthMax);
+
+    //loop and store numeric frequency values
+    //until the [enter/return] is pressed
+    while(1)
+    {
+       if (XUartPs_IsReceiveData(XPAR_XUARTPS_0_BASEADDR)) 
+        {   
+            char c = XUartPs_RecvByte(XPAR_XUARTPS_0_BASEADDR); 
+
+            //Check that all inputs are numeric, if
+            //not output error message and exit function
+            if(c >= '0' && c <= '9')
+            {   word[wordLength++] = c; }
+            else if(c == 0x0D)
+            {   break;  }
+            else 
+            {
+                print("\tNot a valid character, no frequency loaded\n\r");
+                return;
+            }
+
+            // Expand maxmimum length if needed
+            if (wordLength + 1 >= lengthMax) 
+            {
+                lengthMax *= 2;
+                char *newWord = (char *)realloc(word, lengthMax);
+                word = newWord;
+            }              
+        }
+    }
+
+    print("\n\r\tReturn received, done reading frequency\n\r");
+    word[wordLength] = '\0';
+    long long newFrequency = atoll(word); 
+    free(word);   
+
+    if(newFrequency > MAX)
+    {   print("\n\r\tFrequency can't be larger than 100000000.\n\r");   }
+    else 
+    {   frequency = (int32_t)newFrequency;  }
+
+    setPhaseIncrement();
+    displayValues();
 }
 
 int main()
 {
     init_platform();
-    print("\n\rName: Elhyanah Desir\n\r"); 
+    print("\n\r\n\rName: Elhyanah Desir\n\r"); 
     print("Calling configureCodec()...\n\r");  
     configureCodec(); 
     
-    print("Playing ~6kHz tone for 5 seconds...\n\r");
-    int counter = 0;  
-    for(int i = 0; i < 200000; i++)
-    {   
-        writeToFIFO(data_6hz[counter]);   
-        counter = (counter + 1) % 8; 
-    }
-    
-    print("Welcome to audio playback system.\n\r"); 
-    print("\tpress L to load a file.\n\r");
-    print("\tpress C to playback continously followed by any key to stop.\n\r");
-    print("\tpress S to play the sound once.\n\r");
-    print("\tpress B to play a piercing beep for 2 seconds.\n\r");
+    frequency = 50000;
+    setPhaseIncrement();
 
+    displayMenu(); 
+
+    //Loop through and perform whatever specified actions
+    //based on the character that was sent over UART    
     while(1)
     {
         if(XUartPs_IsReceiveData(XPAR_XUARTPS_0_BASEADDR))  
         {
             char c = XUartPs_RecvByte(XPAR_XUARTPS_0_BASEADDR);
-            c = toupper(c);
         
             switch(c)
             {
-                // Load ".dat" file data and store globally
-                case 'L':
-                    print("Please load/send file through terminal client.\n\r");
-                    loadFile();                
+                // Set frequency based on given user input
+                case 'f':
+                    print("\n\r\tEnter a frequency in Hz: ");
+                    getFrequency();                
                     break;
 
-                // Play the loaded sample bytes in a loop
-                // until a key is pressed.
-                case 'C':
-                    print("Playing sound continously. Press any key to stop.\n\r");
-                    int stopped = 0;
-                    int count = 0;
-                    while(stopped == 0)
-                    {   
-                        writeToFIFO(sampleData[count]);  
-                        count = (count + 1) % sampleSize;    
+                // When 'D' decrease by 1000 Hz
+                case 'D':
+                    if (frequency >= 1000)
+                    {   frequency -= 1000;  }
+                    else 
+                    {   frequency = 0;  } 
 
-                        if(XUartPs_IsReceiveData(XPAR_XUARTPS_0_BASEADDR))  
-                        { 
-                            stopped = 1; 
-                            print("Sound stopped.\n\r");                            
-                            (void) XUartPs_RecvByte(XPAR_XUARTPS_0_BASEADDR); 
-                        }                    
-                    }
+                    setPhaseIncrement();
+                    displayValues();               
                     break;
                 
-                // Play the loaded sample bytes once
-                case 'S':
-                    print("Playing sound once.\n\r");
-                    for(int i = 0; i < sampleSize; i++)
-                    {   writeToFIFO(sampleData[i]);  }
+                // When 'd' decrease by 100 Hz
+                case 'd':
+                    if (frequency >= 100)
+                    {   frequency -= 100;   }  
+                    else
+                    {   frequency = 0;  }
+
+                    setPhaseIncrement();
+                    displayValues(); 
                     break;
 
-                // Cycle through 6.103 kHz sample points
-                // for 2 seconds
-                case 'B':
-                    print("Playing beep ...."); 
-                    int counter = 0;                   
-                    for(int i = 0; i < 50000; i++)
-                    {   
-                        writeToFIFO(data_6hz[counter]);   
-                        counter = (counter + 1) % 8;    
-                    }
-                    print("Done.\n\r");
+                // When 'U' increase by 1000 Hz
+                case 'U':
+                    if(frequency <= (MAX - 1000))
+                    {   frequency += 1000;  }
+                    else 
+                    {   frequency = (int32_t)MAX;    }
+
+                    setPhaseIncrement();
+                    displayValues();               
+                    break;
+                
+                // When 'u' increase by 100 Hz
+                case 'u':
+                    if(frequency <= (MAX - 100))
+                    {   frequency += 100;  }
+                    else 
+                    {   frequency = (int32_t)MAX;    }
+
+                    setPhaseIncrement();
+                    displayValues(); 
                     break;
 
-                // Debug Only: 
-                // Cycle through loaded file samples array
-                // and print each 32-bit sample
-                case 'P':
-                    for(int i = 0; i < sampleSize; i++)
-                    {   printf("%08x\n", sampleData[i]); }
-                    break;
-
-                default:
+                // When [space] pressed redisplay menu
+                case 0x20:
+                    displayMenu(); 
                     break;
             }
         }
+        
+        writeToFIFO(increment);    
     }
 
     cleanup_platform();
