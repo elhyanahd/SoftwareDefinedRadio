@@ -46,6 +46,7 @@ architecture bench of lowlevel_dac_intfc_tb is
   signal mclk: std_logic;
   signal latched_data: std_logic ;
   signal data_word : std_logic_vector(31 downto 0) := x"8001fffd";
+  signal counter : integer range 0 to 7 := 0;
 
 begin
 
@@ -75,10 +76,35 @@ begin
        wait for 4 ns;
     end process clkmaker;
 
---data_word <= std_logic_vector(unsigned(data_word)+1) when rising_edge(clk125) and latched_data='1';
-    uut2: wave_generator port map ( resetn => resetn,
-                                    clk       => clk125,
-                                     data_word    => data_word,
-                                     latched_data => latched_data );
-
+    --data_word <= std_logic_vector(unsigned(data_word)+1) when rising_edge(clk125) and latched_data='1';
+    process (clk125)
+    begin
+        if (rising_edge(clk125)) then
+            if (resetn = '0') then
+                counter <= 0;
+                data_word <= (others=>'0');
+            else
+                -- Update the counter once latched_data is asserted
+                if(latched_data = '1') then
+                    if(counter = 7) then
+                        counter <= 0;
+                    else
+                        counter <= counter + 1;
+                    end if;
+                end if;
+                
+                -- Based on counter value, update data word
+                case (counter) is
+                    when 0 => data_word <= std_logic_vector(to_signed( 0, 32));
+                    when 1 => data_word <= std_logic_vector(to_signed( 7070, 32));
+                    when 2 => data_word <= std_logic_vector(to_signed( 10000, 32));
+                    when 3 => data_word <= std_logic_vector(to_signed( 7070, 32));
+                    when 4 => data_word <= std_logic_vector(to_signed( 0, 32));
+                    when 5 => data_word <= std_logic_vector(to_signed( -7070, 32));
+                    when 6 => data_word <= std_logic_vector(to_signed( -10000, 32));
+                    when 7 => data_word <= std_logic_vector(to_signed( -7070, 32));
+                end case;
+            end if;
+        end if;
+    end process;
 end bench;

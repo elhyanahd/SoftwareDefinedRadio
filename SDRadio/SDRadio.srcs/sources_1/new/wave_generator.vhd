@@ -25,13 +25,14 @@ end wave_generator;
 
 architecture Behavioral of wave_generator is
     signal counter : integer range 0 to 7; 
+    signal data_word_l : std_logic_vector(15 downto 0) := x"0000";
 begin
     process (clk)
     begin
         if (rising_edge(clk)) then
             if (resetn = '0') then
                 counter <= 0;
-                data_word <= (others=>'0');
+                data_word_l <= (others=>'0');
             else
                 -- Update the counter once latched_data is asserted
                 if(latched_data = '1') then
@@ -44,16 +45,18 @@ begin
                 
                 -- Based on counter value, update data word
                 case (counter) is
-                    when 0 => data_word <= std_logic_vector(to_signed( 0, 32));
-                    when 1 => data_word <= std_logic_vector(to_signed( 7070, 32));
-                    when 2 => data_word <= std_logic_vector(to_signed( 10000, 32));
-                    when 3 => data_word <= std_logic_vector(to_signed( 7070, 32));
-                    when 4 => data_word <= std_logic_vector(to_signed( 0, 32));
-                    when 5 => data_word <= std_logic_vector(to_signed( -7070, 32));
-                    when 6 => data_word <= std_logic_vector(to_signed( -10000, 32));
-                    when 7 => data_word <= std_logic_vector(to_signed( -7070, 32));
+                    when 0 => data_word_l <= std_logic_vector(to_signed( 0, 16));
+                    when 1 => data_word_l <= std_logic_vector(to_signed( 7070, 16));
+                    when 2 => data_word_l <= std_logic_vector(to_signed( 10000, 16));
+                    when 3 => data_word_l <= std_logic_vector(to_signed( 7070, 16));
+                    when 4 => data_word_l <= std_logic_vector(to_signed( 0, 16));
+                    when 5 => data_word_l <= std_logic_vector(to_signed( -7070, 16));
+                    when 6 => data_word_l <= std_logic_vector(to_signed( -10000, 16));
+                    when 7 => data_word_l <= std_logic_vector(to_signed( -7070, 16));
                 end case;
             end if;
         end if;
     end process;
+    
+    data_word <= data_word_l & data_word_l;
 end Behavioral;

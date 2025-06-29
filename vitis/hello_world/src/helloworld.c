@@ -24,7 +24,6 @@
 #include <xil_types.h>
 #include "platform.h"
 #include "xuartps_hw.h"        // R byte from Ps7 UART
-#include "xllfifo_hw.h"        // W AXI4 Stream FIFO
 #include "xparameters.h"    // List of every peripheral in your system
 #include "xgpio_l.h"        // R/W GPIO
 #include "xiic_l.h"         // R/W I2C (IIC interface)
@@ -85,19 +84,20 @@ void setVolume(u16 volume)
 }
 
 /*
- * @brief: Write given 32-bit to FIFO
+ * @brief: Helper function which sends given data
+ *         to FIFO and after there is available space
  */
-void writeToFIFO(int32_t word)
-{
-    u32 vacancy = 0x0;
+// void writeToFIFO()
+// {
+//     u32 vacancy = 0x0;
     
-    //block until FIFO is free
-    do  {   vacancy = XLlFifo_ReadReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFV_OFFSET); }
-    while (vacancy < sizeof(word));
+//     //block until FIFO is free
+//     do  {   vacancy = XLlFifo_ReadReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFV_OFFSET); }
+//     while (vacancy < sizeof(increment));
 
-    XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFD_OFFSET, word);
-    XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TLF_OFFSET, sizeof(word));
-}
+//     XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFD_OFFSET, increment);
+//     XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TLF_OFFSET, sizeof(increment));
+// }
 
 /*
  * @brief: Set 32-bit value phase increment for input to DDS
@@ -108,6 +108,17 @@ void setPhaseIncrement()
     int64_t freqTemp = (int64_t)frequency;
     int64_t result = (freqTemp * 134217728) / 125000000; 
     increment = (int32_t)result; 
+    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA_OFFSET, increment);
+}
+
+/*
+ * @brief: Enable active-low reset. 
+ */
+void performReset() 
+{    
+    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA2_OFFSET, 0x0);
+    usleep(1);
+    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA2_OFFSET, 0x1);
 }
 
 /*
@@ -195,8 +206,9 @@ int main()
     print("Calling configureCodec()...\n\r");  
     configureCodec(); 
     
-    frequency = 50000;
-    setPhaseIncrement();
+    frequency = 1000;
+    // setPhaseIncrement();
+    // performReset();
 
     displayMenu(); 
 
@@ -260,14 +272,18 @@ int main()
                     displayValues(); 
                     break;
 
+                // When 'r' pressed redisplay menu
+                case 'r':
+                    performReset(); 
+                    print("\n\r\tDDS reset.");
+                    break;
+
                 // When [space] pressed redisplay menu
                 case 0x20:
                     displayMenu(); 
                     break;
             }
-        }
-        
-        writeToFIFO(increment);    
+        }   
     }
 
     cleanup_platform();

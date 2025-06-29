@@ -1,7 +1,7 @@
 {
   "design": {
     "design_info": {
-      "boundary_crc": "0x490C124FC1917593",
+      "boundary_crc": "0x3B8F5338EC2AB40",
       "device": "xc7z020clg400-1",
       "gen_directory": "../../../../SDRadio.gen/sources_1/bd/lab2_proc_system",
       "name": "lab2_proc_system",
@@ -18,7 +18,9 @@
       "axi_fifo_mm_s_0": "",
       "axis_data_fifo_0": "",
       "axi_smc": "",
-      "axis_clock_converter_0": ""
+      "axis_clock_converter_0": "",
+      "axi_gpio_0": "",
+      "xpm_cdc_gen_0": ""
     },
     "interface_ports": {
       "DDR": {
@@ -368,6 +370,9 @@
             "value_src": "default"
           }
         }
+      },
+      "ps7_reset": {
+        "direction": "O"
       }
     },
     "components": {
@@ -1774,6 +1779,54 @@
             ]
           }
         }
+      },
+      "axi_gpio_0": {
+        "vlnv": "xilinx.com:ip:axi_gpio:2.0",
+        "ip_revision": "35",
+        "xci_name": "lab2_proc_system_axi_gpio_0_0",
+        "xci_path": "ip\\lab2_proc_system_axi_gpio_0_0_2\\lab2_proc_system_axi_gpio_0_0.xci",
+        "inst_hier_path": "axi_gpio_0",
+        "parameters": {
+          "C_ALL_OUTPUTS": {
+            "value": "1"
+          },
+          "C_GPIO_WIDTH": {
+            "value": "1"
+          },
+          "GPIO_BOARD_INTERFACE": {
+            "value": "Custom"
+          },
+          "USE_BOARD_FLOW": {
+            "value": "true"
+          }
+        }
+      },
+      "xpm_cdc_gen_0": {
+        "vlnv": "xilinx.com:ip:xpm_cdc_gen:1.0",
+        "ip_revision": "4",
+        "xci_name": "lab2_proc_system_xpm_cdc_gen_0_0",
+        "xci_path": "ip\\lab2_proc_system_xpm_cdc_gen_0_0_1\\lab2_proc_system_xpm_cdc_gen_0_0.xci",
+        "inst_hier_path": "xpm_cdc_gen_0",
+        "parameters": {
+          "CDC_TYPE": {
+            "value": "xpm_cdc_async_rst"
+          },
+          "DEST_SYNC_FF": {
+            "value": "2"
+          },
+          "INIT_SYNC_FF": {
+            "value": "true"
+          },
+          "RST_ACTIVE_HIGH": {
+            "value": "false"
+          },
+          "SIM_ASSERT_CHK": {
+            "value": "false"
+          },
+          "WIDTH": {
+            "value": "0"
+          }
+        }
       }
     },
     "interface_nets": {
@@ -1817,6 +1870,12 @@
         "interface_ports": [
           "axi_smc/M02_AXI",
           "dips_and_leds/S_AXI"
+        ]
+      },
+      "axi_smc_M03_AXI": {
+        "interface_ports": [
+          "axi_smc/M03_AXI",
+          "axi_gpio_0/S_AXI"
         ]
       },
       "axis_clock_converter_0_M_AXIS": {
@@ -1863,6 +1922,12 @@
           "axis_data_fifo_0/s_axis_tvalid"
         ]
       },
+      "axi_gpio_0_gpio_io_o": {
+        "ports": [
+          "axi_gpio_0/gpio_io_o",
+          "xpm_cdc_gen_0/src_arst"
+        ]
+      },
       "axis_clock_converter_0_s_axis_tready": {
         "ports": [
           "axis_clock_converter_0/s_axis_tready",
@@ -1890,7 +1955,8 @@
       "m_axis_aclk_0_1": {
         "ports": [
           "m_axis_aclk_0",
-          "axis_clock_converter_0/m_axis_aclk"
+          "axis_clock_converter_0/m_axis_aclk",
+          "xpm_cdc_gen_0/dest_clk"
         ]
       },
       "m_axis_aresetn_0_1": {
@@ -1903,13 +1969,14 @@
         "ports": [
           "processing_system7_0/FCLK_CLK0",
           "axi_fifo_mm_s_0/s_axi_aclk",
-          "axi_smc/aclk",
           "axis_data_fifo_0/s_axis_aclk",
           "rst_ps7_0_125M/slowest_sync_clk",
           "axi_iic_0/s_axi_aclk",
           "dips_and_leds/s_axi_aclk",
           "processing_system7_0/M_AXI_GP0_ACLK",
-          "axis_clock_converter_0/s_axis_aclk"
+          "axis_clock_converter_0/s_axis_aclk",
+          "axi_smc/aclk",
+          "axi_gpio_0/s_axi_aclk"
         ]
       },
       "processing_system7_0_FCLK_RESET0_N": {
@@ -1926,7 +1993,14 @@
           "axi_iic_0/s_axi_aresetn",
           "dips_and_leds/s_axi_aresetn",
           "axis_clock_converter_0/s_axis_aresetn",
-          "axi_smc/aresetn"
+          "axi_smc/aresetn",
+          "axi_gpio_0/s_axi_aresetn"
+        ]
+      },
+      "xpm_cdc_gen_0_dest_arst": {
+        "ports": [
+          "xpm_cdc_gen_0/dest_arst",
+          "ps7_reset"
         ]
       }
     },
@@ -1944,6 +2018,11 @@
               "SEG_axi_gpio_0_Reg": {
                 "address_block": "/dips_and_leds/S_AXI/Reg",
                 "offset": "0x41200000",
+                "range": "64K"
+              },
+              "SEG_axi_gpio_0_Reg_1": {
+                "address_block": "/axi_gpio_0/S_AXI/Reg",
+                "offset": "0x41210000",
                 "range": "64K"
               },
               "SEG_axi_iic_0_Reg": {
