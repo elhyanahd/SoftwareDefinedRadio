@@ -63,13 +63,13 @@ architecture Behavioral of sdr_top is
     -- signals to/from DAC Interface 
     signal lrclk, bclk, mclk, sdata, latched_data : std_logic;
     signal dac_data_word : std_logic_vector(31 downto 0);
-    signal dds_ready, dds_sample :std_logic_vector(15 downto 0);
+    signal dds_ready, dds_ready_reg, dds_sample :std_logic_vector(15 downto 0);
     signal dac_data_index_reg : integer range 0 to 31;
     signal dac_data_index : std_logic_vector(31 downto 0);
     signal dac_data_valid : std_logic;
     
     -- signal to/from DDS Compiler
-    signal phase_increment : std_logic_vector(31 downto 0);
+    signal phase_increment, phase_ready : std_logic_vector(31 downto 0);
     signal increment_valid, ps7_reset : std_logic;
     
     -- signals for SCL and SDA IOBUFs 
@@ -152,14 +152,9 @@ architecture Behavioral of sdr_top is
             probe3 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
             probe4 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
             probe5 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
-            probe6 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
-            probe7 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
-            probe8 : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
-            probe9 : IN STD_LOGIC_VECTOR(31 DOWNTO 0));
+            probe6 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
+            probe7 : IN STD_LOGIC_VECTOR(31 DOWNTO 0));
       end component;
-      
-    constant increment : integer := 6553;   -- (6103 * 2^27)/125 MHz
-
 begin
     -- connecting external pins to local signals
     OBUF_inst1 : OBUF
@@ -168,14 +163,7 @@ begin
            I => CLK125MHZ);
            
     resetn <= not(btn(0));
-    
-    -- Instance of Sine Wave Generator
---    sine_wave : entity work.wave_generator(Behavioral)
---                port map (clk => clk,
---                          resetn => resetn,
---                          latched_data => latched_data,
---                          data_word => dac_data_word);
-    
+        
     -- Instance of DAC Interface
     dac_intfc : entity work.lowlevel_dac_intfc(Behavioral) 
                 port map (resetn => resetn,
@@ -212,7 +200,7 @@ begin
       FIXED_IO_ps_clk => FIXED_IO_ps_clk,
       FIXED_IO_ps_porb => FIXED_IO_ps_porb,
       FIXED_IO_ps_srstb => FIXED_IO_ps_srstb,
-      M_AXIS_0_tdata(31 downto 0) => open,
+      M_AXIS_0_tdata(31 downto 0) => phase_ready,
       M_AXIS_0_tready => '1',
       M_AXIS_0_tvalid => increment_valid,
       hdmi_in_ddc_scl_i => hdmi_in_ddc_scl_i,
@@ -227,24 +215,39 @@ begin
       ps7_reset => ps7_reset,
       sws_4bits_tri_i(3 downto 0) => sw);
       
-      phase_increment <= std_logic_vector(to_signed(increment, 32));
-      wave_gen : dds_compiler_0
+      -- DDS output register
+    phase_reg : process(clk)
+    begin
+        if rising_edge(clk) then
+            if resetn = '0' then
+                phase_increment <= (others => '0');
+            elsif increment_valid = '1' then
+                phase_increment <= phase_ready; -- Only latch stable sample
+            end if;
+        end if;
+    end process;
+      
+      dds_gen : dds_compiler_0
       port map (
         aclk => clk,
-        aresetn => resetn,
+        aresetn => ps7_reset,
         s_axis_phase_tvalid => '1',
         s_axis_phase_tdata => phase_increment,
         m_axis_data_tvalid => dac_data_valid,
         m_axis_data_tdata => dds_ready);
         
     -- DDS output register
-    process(clk)
+    dds_reg : process(clk)
     begin
         if rising_edge(clk) then
             if resetn = '0' then
                 dds_sample <= (others => '0');
-            elsif latched_data = '1' and dac_data_valid = '1' then
-                dds_sample <= dds_ready; -- Only latch stable sample
+            elsif dac_data_valid = '1' then
+                if latched_data = '1' then
+                    dds_sample <= dds_ready; -- Only latch stable sample
+                end if;
+                
+                dds_ready_reg <= dds_ready;
             end if;
         end if;
     end process;
@@ -272,24 +275,21 @@ begin
       ac_bclk <= bclk;
       ac_mclk <= mclk;
       ac_pblrc <= lrclk;
-      --ac_reclrc <= lrclk;
       ac_sda <= hdmi_in_ddc_sda_io;
       ac_scl <= hdmi_in_ddc_scl_io;
       ac_pbdat <= sdata;
       
       --ILA Instance
-      dac_data_index <= std_logic_vector(to_unsigned(dac_data_index_reg, 32));
+      --dac_data_index <= std_logic_vector(to_unsigned(dac_data_index_reg, 32));
       ila_inst : ila_0
         port map (
             clk => CLK125MHZ,
-            probe0 => dac_data_index,
+            probe0 => phase_increment,
             probe1(0) => sdata,
             probe2(0) => lrclk,
             probe3(0) => bclk,
-            probe4(0) => resetn,
+            probe4(0) => ps7_reset,
             probe5(0) => latched_data,
-            probe6(0) => ps7_reset,
-            probe7(0) => increment_valid,
-            probe8(0) => dac_data_valid,
-            probe9 => dac_data_word);  
+            probe6 => dds_ready_reg,
+            probe7 => dac_data_word);  
 end Behavioral;

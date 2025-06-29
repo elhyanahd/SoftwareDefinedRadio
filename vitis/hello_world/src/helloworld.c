@@ -25,6 +25,7 @@
 #include "platform.h"
 #include "xuartps_hw.h"        // R byte from Ps7 UART
 #include "xparameters.h"    // List of every peripheral in your system
+#include "xllfifo_hw.h"        // W AXI4 Stream FIFO
 #include "xgpio_l.h"        // R/W GPIO
 #include "xiic_l.h"         // R/W I2C (IIC interface)
 #include "sleep.h"
@@ -87,17 +88,17 @@ void setVolume(u16 volume)
  * @brief: Helper function which sends given data
  *         to FIFO and after there is available space
  */
-// void writeToFIFO()
-// {
-//     u32 vacancy = 0x0;
+void writeToFIFO()
+{
+    u32 vacancy = 0x0;
     
-//     //block until FIFO is free
-//     do  {   vacancy = XLlFifo_ReadReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFV_OFFSET); }
-//     while (vacancy < sizeof(increment));
+    //block until FIFO is free
+    do  {   vacancy = XLlFifo_ReadReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFV_OFFSET); }
+    while (vacancy < sizeof(increment));
 
-//     XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFD_OFFSET, increment);
-//     XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TLF_OFFSET, sizeof(increment));
-// }
+    XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFD_OFFSET, increment);
+    XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TLF_OFFSET, sizeof(increment));
+}
 
 /*
  * @brief: Set 32-bit value phase increment for input to DDS
@@ -108,7 +109,6 @@ void setPhaseIncrement()
     int64_t freqTemp = (int64_t)frequency;
     int64_t result = (freqTemp * 134217728) / 125000000; 
     increment = (int32_t)result; 
-    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA_OFFSET, increment);
 }
 
 /*
@@ -116,9 +116,10 @@ void setPhaseIncrement()
  */
 void performReset() 
 {    
-    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA2_OFFSET, 0x0);
+    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA_OFFSET, 0x0);
     usleep(1);
-    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA2_OFFSET, 0x1);
+    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA_OFFSET, 0x1);
+    print("\tReseting DDS....\n\r"); 
 }
 
 /*
@@ -137,6 +138,7 @@ void displayValues()
  */
 void displayMenu()
 {
+    print("\n\r\n\rName: Elhyanah Desir\n\r"); 
     print("Welcome to audio system.\n\r"); 
     print("\tPress 'f' to tune to a new frequency.\n\r");
     print("\tPress 'U/u' to increase frequency by 1000/100 Hz.\n\r");
@@ -146,7 +148,10 @@ void displayMenu()
 }
 
 /*
- *  @brief: 
+ *  @brief: Loops and collects all the numeric value inputs by user
+ *          to store frequency, Prints error messange if input is 
+ *          not numeric else prints updated phase and frequency.
+ *          If given frequency exceeds max 
  */
 void getFrequency()
 {
@@ -171,7 +176,7 @@ void getFrequency()
             {   break;  }
             else 
             {
-                print("\tNot a valid character, no frequency loaded\n\r");
+                print("\n\r\tNot a valid character, no frequency loaded\n\r");
                 return;
             }
 
@@ -190,7 +195,7 @@ void getFrequency()
     long long newFrequency = atoll(word); 
     free(word);   
 
-    if(newFrequency > MAX)
+    if(newFrequency > 100000000 || wordLength > 9)
     {   print("\n\r\tFrequency can't be larger than 100000000.\n\r");   }
     else 
     {   frequency = (int32_t)newFrequency;  }
@@ -202,15 +207,14 @@ void getFrequency()
 int main()
 {
     init_platform();
-    print("\n\r\n\rName: Elhyanah Desir\n\r"); 
     print("Calling configureCodec()...\n\r");  
     configureCodec(); 
-    
-    frequency = 1000;
-    // setPhaseIncrement();
-    // performReset();
 
     displayMenu(); 
+
+    frequency = 1000;
+    setPhaseIncrement();
+    performReset(); 
 
     //Loop through and perform whatever specified actions
     //based on the character that was sent over UART    
@@ -233,7 +237,10 @@ int main()
                     if (frequency >= 1000)
                     {   frequency -= 1000;  }
                     else 
-                    {   frequency = 0;  } 
+                    {   
+                        frequency = 0;  
+                        print("\n\r\tMinimum frequency is 0 Hz.\n\r"); 
+                    } 
 
                     setPhaseIncrement();
                     displayValues();               
@@ -244,7 +251,10 @@ int main()
                     if (frequency >= 100)
                     {   frequency -= 100;   }  
                     else
-                    {   frequency = 0;  }
+                    {   
+                        frequency = 0;  
+                        print("\n\r\tMinimum frequency is 0 Hz.\n\r"); 
+                    }
 
                     setPhaseIncrement();
                     displayValues(); 
@@ -255,7 +265,10 @@ int main()
                     if(frequency <= (MAX - 1000))
                     {   frequency += 1000;  }
                     else 
-                    {   frequency = (int32_t)MAX;    }
+                    {   
+                        frequency = (int32_t)MAX;  
+                        printf("\n\r\tMaximum frequency is %d Hz.\n\r", MAX);   
+                    }
 
                     setPhaseIncrement();
                     displayValues();               
@@ -266,7 +279,10 @@ int main()
                     if(frequency <= (MAX - 100))
                     {   frequency += 100;  }
                     else 
-                    {   frequency = (int32_t)MAX;    }
+                    {   
+                        frequency = (int32_t)MAX;  
+                        printf("\n\r\tMaximum frequency is %d Hz.\n\r", MAX);  
+                    }
 
                     setPhaseIncrement();
                     displayValues(); 
@@ -275,15 +291,16 @@ int main()
                 // When 'r' pressed redisplay menu
                 case 'r':
                     performReset(); 
-                    print("\n\r\tDDS reset.");
                     break;
 
                 // When [space] pressed redisplay menu
-                case 0x20:
+                case 0x20:               
                     displayMenu(); 
                     break;
             }
         }   
+
+        writeToFIFO();
     }
 
     cleanup_platform();
