@@ -1,7 +1,7 @@
 {
   "design": {
     "design_info": {
-      "boundary_crc": "0x3B8F5338EC2AB40",
+      "boundary_crc": "0x673F55C7D9D7BB80",
       "device": "xc7z020clg400-1",
       "gen_directory": "../../../../SDRadio.gen/sources_1/bd/lab2_proc_system",
       "name": "lab2_proc_system",
@@ -12,7 +12,6 @@
     },
     "design_tree": {
       "processing_system7_0": "",
-      "dips_and_leds": "",
       "rst_ps7_0_125M": "",
       "axi_iic_0": "",
       "axi_fifo_mm_s_0": "",
@@ -188,32 +187,6 @@
           "PS_PORB": {
             "physical_name": "FIXED_IO_ps_porb",
             "direction": "IO"
-          }
-        }
-      },
-      "sws_4bits": {
-        "mode": "Master",
-        "vlnv_bus_definition": "xilinx.com:interface:gpio:1.0",
-        "vlnv": "xilinx.com:interface:gpio_rtl:1.0",
-        "port_maps": {
-          "TRI_I": {
-            "physical_name": "sws_4bits_tri_i",
-            "direction": "I",
-            "left": "3",
-            "right": "0"
-          }
-        }
-      },
-      "leds_4bits": {
-        "mode": "Master",
-        "vlnv_bus_definition": "xilinx.com:interface:gpio:1.0",
-        "vlnv": "xilinx.com:interface:gpio_rtl:1.0",
-        "port_maps": {
-          "TRI_O": {
-            "physical_name": "leds_4bits_tri_o",
-            "direction": "O",
-            "left": "3",
-            "right": "0"
           }
         }
       },
@@ -1520,24 +1493,6 @@
           }
         }
       },
-      "dips_and_leds": {
-        "vlnv": "xilinx.com:ip:axi_gpio:2.0",
-        "ip_revision": "35",
-        "xci_name": "lab2_proc_system_dips_and_leds_0",
-        "xci_path": "ip\\lab2_proc_system_dips_and_leds_0\\lab2_proc_system_dips_and_leds_0.xci",
-        "inst_hier_path": "dips_and_leds",
-        "parameters": {
-          "GPIO2_BOARD_INTERFACE": {
-            "value": "leds_4bits"
-          },
-          "GPIO_BOARD_INTERFACE": {
-            "value": "sws_4bits"
-          },
-          "USE_BOARD_FLOW": {
-            "value": "true"
-          }
-        }
-      },
       "rst_ps7_0_125M": {
         "vlnv": "xilinx.com:ip:proc_sys_reset:5.0",
         "ip_revision": "16",
@@ -1836,18 +1791,6 @@
           "axis_data_fifo_0/S_AXIS"
         ]
       },
-      "axi_gpio_0_GPIO": {
-        "interface_ports": [
-          "sws_4bits",
-          "dips_and_leds/GPIO"
-        ]
-      },
-      "axi_gpio_0_GPIO2": {
-        "interface_ports": [
-          "leds_4bits",
-          "dips_and_leds/GPIO2"
-        ]
-      },
       "axi_iic_0_IIC": {
         "interface_ports": [
           "hdmi_in_ddc",
@@ -1864,12 +1807,6 @@
         "interface_ports": [
           "axi_smc/M01_AXI",
           "axi_iic_0/S_AXI"
-        ]
-      },
-      "axi_smc_M02_AXI": {
-        "interface_ports": [
-          "axi_smc/M02_AXI",
-          "dips_and_leds/S_AXI"
         ]
       },
       "axi_smc_M03_AXI": {
@@ -1972,7 +1909,6 @@
           "axis_data_fifo_0/s_axis_aclk",
           "rst_ps7_0_125M/slowest_sync_clk",
           "axi_iic_0/s_axi_aclk",
-          "dips_and_leds/s_axi_aclk",
           "processing_system7_0/M_AXI_GP0_ACLK",
           "axis_clock_converter_0/s_axis_aclk",
           "axi_smc/aclk",
@@ -1991,7 +1927,6 @@
           "axi_fifo_mm_s_0/s_axi_aresetn",
           "axis_data_fifo_0/s_axis_aresetn",
           "axi_iic_0/s_axi_aresetn",
-          "dips_and_leds/s_axi_aresetn",
           "axis_clock_converter_0/s_axis_aresetn",
           "axi_smc/aresetn",
           "axi_gpio_0/s_axi_aresetn"
@@ -2014,11 +1949,6 @@
                 "offset": "0x43C00000",
                 "range": "64K",
                 "offset_high_param": "C_HIGHADDR"
-              },
-              "SEG_axi_gpio_0_Reg": {
-                "address_block": "/dips_and_leds/S_AXI/Reg",
-                "offset": "0x41200000",
-                "range": "64K"
               },
               "SEG_axi_gpio_0_Reg_1": {
                 "address_block": "/axi_gpio_0/S_AXI/Reg",

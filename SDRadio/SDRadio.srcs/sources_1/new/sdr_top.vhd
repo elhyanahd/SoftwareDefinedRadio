@@ -60,9 +60,12 @@ architecture Behavioral of sdr_top is
     signal clk, resetn : std_logic;
     signal switches    : std_logic_vector(3 downto 0);
     
+    -- SW[0] for FIR Compiler application
+    signal filter_sel : std_logic;
+    
     -- signals to/from DAC Interface 
     signal lrclk, bclk, mclk, sdata, latched_data : std_logic;
-    signal dac_data_word : std_logic_vector(31 downto 0);
+    signal dac_data_word, filtered, unfiltered : std_logic_vector(31 downto 0);
     signal dds_ready, dds_ready_reg, dds_sample :std_logic_vector(15 downto 0);
     signal dac_data_index_reg : integer range 0 to 31;
     signal dac_data_index : std_logic_vector(31 downto 0);
@@ -115,8 +118,6 @@ architecture Behavioral of sdr_top is
         FIXED_IO_ps_srstb : inout STD_LOGIC;
         FIXED_IO_ps_clk : inout STD_LOGIC;
         FIXED_IO_ps_porb : inout STD_LOGIC;
-        sws_4bits_tri_i : in STD_LOGIC_VECTOR ( 3 downto 0 );
-        leds_4bits_tri_o : out STD_LOGIC_VECTOR ( 3 downto 0 );
         hdmi_in_ddc_scl_i : in STD_LOGIC;
         hdmi_in_ddc_scl_o : out STD_LOGIC;
         hdmi_in_ddc_scl_t : out STD_LOGIC;
@@ -156,15 +157,23 @@ architecture Behavioral of sdr_top is
             probe7 : IN STD_LOGIC_VECTOR(31 DOWNTO 0));
       end component;
 begin
-    -- connecting external pins to local signals
+    --------------------------------------------
+    -------- Intputs for External Pins ---------
+    --------------------------------------------
     OBUF_inst1 : OBUF
         port map (
            O => clk,
            I => CLK125MHZ);
            
     resetn <= not(btn(0));
+    switches <= sw;
         
-    -- Instance of DAC Interface
+    --------------------------------------------
+    ------- DAC Interface Implementation -------
+    --------------------------------------------
+    
+    dac_data_word <= filtered when (switches(0) = '1') else unfiltered;
+     
     dac_intfc : entity work.lowlevel_dac_intfc(Behavioral) 
                 port map (resetn => resetn,
                           clk => clk,
@@ -176,7 +185,9 @@ begin
                           index => dac_data_index_reg,
                           latched_data => latched_data);
                           
-    -- Instance of Zynq Process System
+    --------------------------------------------
+    ---- Zynq Process System Implementation ----
+    --------------------------------------------
     proc_system : lab2_proc_system
      port map (
       DDR_addr(14 downto 0) => DDR_addr(14 downto 0),
@@ -209,13 +220,14 @@ begin
       hdmi_in_ddc_sda_i => hdmi_in_ddc_sda_i,
       hdmi_in_ddc_sda_o => hdmi_in_ddc_sda_o,
       hdmi_in_ddc_sda_t => hdmi_in_ddc_sda_t,
-      leds_4bits_tri_o(3 downto 0) => led,
       m_axis_aclk_0 => clk,
       m_axis_aresetn_0 => resetn,
-      ps7_reset => ps7_reset,
-      sws_4bits_tri_i(3 downto 0) => sw);
+      ps7_reset => ps7_reset);
       
-      -- DDS output register
+    --------------------------------------------
+    ------- DDS Compiler Implementation --------
+    --------------------------------------------
+    -- DDS output register
     phase_reg : process(clk)
     begin
         if rising_edge(clk) then
@@ -227,7 +239,7 @@ begin
         end if;
     end process;
       
-      dds_gen : dds_compiler_0
+    dds_gen : dds_compiler_0
       port map (
         aclk => clk,
         aresetn => ps7_reset,
@@ -253,7 +265,21 @@ begin
     end process;
     
     -- Combine into full 32-bit word (duplicate for both channels)
-    dac_data_word <= dds_sample & dds_sample;
+    unfiltered <= dds_sample & dds_sample;
+    
+    --------------------------------------------
+    ---------- Filter  Implementation ----------
+    --------------------------------------------
+    filter_intfc : entity work.filter_design(Behavioral)
+        port map ( clk => clk,
+                   resetn => resetn,
+                   dds_data => dds_sample,
+                   dds_valid => '1',
+                   dac_data => filtered);
+                       
+    --------------------------------------------
+    -------- Outputs for External Pins ---------
+    --------------------------------------------
       
       -- IOBUF instances for SCL and SDA
       scl_iobuf: IOBUF
@@ -279,17 +305,19 @@ begin
       ac_scl <= hdmi_in_ddc_scl_io;
       ac_pbdat <= sdata;
       
-      --ILA Instance
-      --dac_data_index <= std_logic_vector(to_unsigned(dac_data_index_reg, 32));
-      ila_inst : ila_0
-        port map (
-            clk => CLK125MHZ,
-            probe0 => phase_increment,
-            probe1(0) => sdata,
-            probe2(0) => lrclk,
-            probe3(0) => bclk,
-            probe4(0) => ps7_reset,
-            probe5(0) => latched_data,
-            probe6 => dds_ready_reg,
-            probe7 => dac_data_word);  
+    --------------------------------------------
+    ------------ ILA Implementation ------------
+    --------------------------------------------
+    --dac_data_index <= std_logic_vector(to_unsigned(dac_data_index_reg, 32));
+--    ila_inst : ila_0
+--        port map (
+--            clk => CLK125MHZ,
+--            probe0 => phase_increment,
+--            probe1(0) => sdata,
+--            probe2(0) => lrclk,
+--            probe3(0) => bclk,
+--            probe4(0) => ps7_reset,
+--            probe5(0) => latched_data,
+--            probe6 => dds_ready_reg,
+--            probe7 => dac_data_word);  
 end Behavioral;
