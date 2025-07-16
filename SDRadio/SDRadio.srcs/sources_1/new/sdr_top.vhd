@@ -69,7 +69,7 @@ architecture Behavioral of sdr_top is
     signal dds_ready, dds_ready_reg, dds_sample :std_logic_vector(15 downto 0);
     signal dac_data_index_reg : integer range 0 to 31;
     signal dac_data_index : std_logic_vector(31 downto 0);
-    signal dac_data_valid : std_logic;
+    signal dds_data_valid : std_logic;
     
     -- signal to/from DDS Compiler
     signal phase_increment, phase_ready : std_logic_vector(31 downto 0);
@@ -245,7 +245,7 @@ begin
         aresetn => ps7_reset,
         s_axis_phase_tvalid => '1',
         s_axis_phase_tdata => phase_increment,
-        m_axis_data_tvalid => dac_data_valid,
+        m_axis_data_tvalid => dds_data_valid,
         m_axis_data_tdata => dds_ready);
         
     -- DDS output register
@@ -254,12 +254,10 @@ begin
         if rising_edge(clk) then
             if resetn = '0' then
                 dds_sample <= (others => '0');
-            elsif dac_data_valid = '1' then
+            elsif dds_data_valid = '1' then
                 if latched_data = '1' then
                     dds_sample <= dds_ready; -- Only latch stable sample
                 end if;
-                
-                dds_ready_reg <= dds_ready;
             end if;
         end if;
     end process;
@@ -273,8 +271,8 @@ begin
     filter_intfc : entity work.filter_design(Behavioral)
         port map ( clk => clk,
                    resetn => resetn,
-                   dds_data => dds_sample,
-                   dds_valid => '1',
+                   dds_data => dds_ready,
+                   dds_valid => dds_data_valid,
                    dac_data => filtered);
                        
     --------------------------------------------
@@ -308,16 +306,16 @@ begin
     --------------------------------------------
     ------------ ILA Implementation ------------
     --------------------------------------------
-    --dac_data_index <= std_logic_vector(to_unsigned(dac_data_index_reg, 32));
---    ila_inst : ila_0
---        port map (
---            clk => CLK125MHZ,
---            probe0 => phase_increment,
---            probe1(0) => sdata,
---            probe2(0) => lrclk,
---            probe3(0) => bclk,
---            probe4(0) => ps7_reset,
---            probe5(0) => latched_data,
---            probe6 => dds_ready_reg,
---            probe7 => dac_data_word);  
+   -- dac_data_index <= std_logic_vector(to_unsigned(dac_data_index_reg, 32));
+    ila_inst : ila_0
+        port map (
+            clk => CLK125MHZ,
+            probe0 => unfiltered,
+            probe1(0) => sdata,
+            probe2(0) => lrclk,
+            probe3(0) => bclk,
+            probe4(0) => ps7_reset,
+            probe5(0) => latched_data,
+            probe6 => dds_sample,
+            probe7 => filtered);  
 end Behavioral;

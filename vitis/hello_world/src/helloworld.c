@@ -144,7 +144,8 @@ void displayMenu()
     print("\tPress 'U/u' to increase frequency by 1000/100 Hz.\n\r");
     print("\tPress 'D/d' to decrease frequency by 1000/100 Hz.\n\r");
     print("\tPress 'r' to reset the phase.\n\r");
-    print("\tPress [space] to repeat this menu.\n\r");    
+    print("\tPress [space] to repeat this menu.\n\r"); 
+    print("\tSet SW0 to 0 for Unfiltered or to 1 for Filtered data.\n\r");    
 }
 
 /*
