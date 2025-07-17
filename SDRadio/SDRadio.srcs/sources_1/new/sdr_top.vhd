@@ -62,6 +62,8 @@ architecture Behavioral of sdr_top is
     
     -- SW[0] for FIR Compiler application
     signal filter_sel : std_logic;
+     signal filter_ready : std_logic_vector(31 downto 0) := (others => '0');
+
     
     -- signals to/from DAC Interface 
     signal lrclk, bclk, mclk, sdata, latched_data : std_logic;
@@ -273,8 +275,19 @@ begin
                    resetn => resetn,
                    dds_data => dds_ready,
                    dds_valid => dds_data_valid,
-                   dac_data => filtered);
+                   dac_data => filter_ready);
                        
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if resetn = '0' then
+                filtered <= (others => '0');
+            elsif latched_data = '1' then
+                filtered <= filter_ready;
+            end if;
+        end if;
+    end process;
+
     --------------------------------------------
     -------- Outputs for External Pins ---------
     --------------------------------------------
