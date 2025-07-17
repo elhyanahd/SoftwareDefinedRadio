@@ -13,6 +13,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 entity filter_design is
     Port ( clk : in STD_LOGIC;      -- 125 MHz Clock
@@ -32,7 +33,7 @@ architecture Behavioral of filter_design is
         s_axis_data_tready : OUT STD_LOGIC;
         s_axis_data_tdata : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
         m_axis_data_tvalid : OUT STD_LOGIC;
-        m_axis_data_tdata : OUT STD_LOGIC_VECTOR(15 DOWNTO 0));
+        m_axis_data_tdata : OUT STD_LOGIC_VECTOR(31 DOWNTO 0));
     END COMPONENT;
     
     COMPONENT fir_compiler_3MHz
@@ -40,14 +41,15 @@ architecture Behavioral of filter_design is
         aclk : IN STD_LOGIC;
         s_axis_data_tvalid : IN STD_LOGIC;
         s_axis_data_tready : OUT STD_LOGIC;
-        s_axis_data_tdata : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+        s_axis_data_tdata : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
         m_axis_data_tvalid : OUT STD_LOGIC;
-        m_axis_data_tdata : OUT STD_LOGIC_VECTOR(15 DOWNTO 0));
+        m_axis_data_tdata : OUT STD_LOGIC_VECTOR(47 DOWNTO 0));
     END COMPONENT;
     
-    signal fir1_data_valid, fir2_data_valid : std_logic;
-    signal fir1_data_out, fir2_data_out : std_logic_vector(15 downto 0);
-    signal latched_dac_data : std_logic_vector(31 downto 0) := (others => '0');
+    signal fir1_data_valid, fir2_data_valid, fir2_valid_in : std_logic;
+    signal fir1_data_out : std_logic_vector(31 downto 0);
+    signal fir2_data_out: std_logic_vector(47 downto 0);
+    signal latched_dac_data : std_logic_vector(15 downto 0);
 
 begin
 
@@ -84,10 +86,10 @@ begin
             if resetn = '0' then
                 latched_dac_data <= (others => '0');
             elsif fir2_data_valid = '1' then
-                latched_dac_data <= fir2_data_out & fir2_data_out;
+                latched_dac_data <= std_logic_vector(shift_right(signed(fir2_data_out), 30)(15 downto 0));
             end if;
         end if;
     end process;
     
-    dac_data <= latched_dac_data;
+    dac_data <= latched_dac_data & latched_dac_data;
 end Behavioral;
