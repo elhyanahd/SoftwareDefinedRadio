@@ -47,7 +47,7 @@ architecture bench of filter_tb is
            dac_data : out STD_LOGIC_VECTOR (31 downto 0));
     end component;
     
-    signal m_axis_data_tvalid, resetn, clk : std_logic;
+    signal m_axis_data_tvalid, resetn, clk : std_logic := '0';
     signal wave: std_logic_vector(15 downto 0);
     signal phase_in, filtered: std_logic_vector(31 downto 0);
     
