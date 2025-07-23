@@ -22,7 +22,7 @@ entity filter_design is
            dds_data : in STD_LOGIC_VECTOR (15 downto 0);
            dds_valid : in STD_LOGIC;
            -- Output of Filter for DAC Interface
-           dac_data : out STD_LOGIC_VECTOR (31 downto 0));
+           dac_data : out STD_LOGIC_VECTOR (15 downto 0));
 end filter_design;
 
 architecture Behavioral of filter_design is
@@ -95,5 +95,5 @@ begin
         end if;
     end process;
     
-    dac_data <= latched_fir2_data & latched_fir2_data;
+    dac_data <= latched_fir2_data;
 end Behavioral;

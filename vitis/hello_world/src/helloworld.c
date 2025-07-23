@@ -20,18 +20,19 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <ctype.h>
-#include "xil_printf.h"
+#include <xil_printf.h>
 #include <xil_types.h>
 #include "platform.h"
 #include "xuartps_hw.h"        // R byte from Ps7 UART
 #include "xparameters.h"    // List of every peripheral in your system
-#include "xllfifo_hw.h"        // W AXI4 Stream FIFO
 #include "xgpio_l.h"        // R/W GPIO
 #include "xiic_l.h"         // R/W I2C (IIC interface)
 #include "sleep.h"
 
-static int32_t increment = 0;
 static int32_t frequency = 0; 
+static int32_t tune = 0; 
+static const u16 volume_table[] = { 0x67, 0x69, 0x71, 0x73, 0x75, 0x77, 0x79, 0x7B, 0x7D, 0x7F};
+static int volume_index = 8;  // start at 0x79
 static const int MAX = 100000000;
 
 /*
@@ -61,8 +62,8 @@ void configureCodec()
     writeCodecReg(6,0x37);
     writeCodecReg(0,0x80);
     writeCodecReg(1,0x80);
-    writeCodecReg(2,0x79);
-    writeCodecReg(3,0x79);
+    writeCodecReg(2,volume_table[volume_index]);
+    writeCodecReg(3,volume_table[volume_index]);
     writeCodecReg(4,0x10);
     writeCodecReg(5,0x00);
     writeCodecReg(7,0x02);
@@ -75,40 +76,22 @@ void configureCodec()
 
 /*
  * @brief: Write given volume to CODEC
- * @param: volume
  */
-void setVolume(u16 volume)
+void setVolume()
 {
-    writeCodecReg(2, volume);
-    writeCodecReg(3, volume);
-    printf("Volume set to: 0x%04x\r\n", volume);
+    writeCodecReg(2, volume_table[volume_index]);
+    writeCodecReg(3, volume_table[volume_index]);
 }
 
 /*
- * @brief: Helper function which sends given data
- *         to FIFO and after there is available space
+ * @brief: Return 32-bit value phase increment for input to DDS
+ *         based on given frequency. 
  */
-void writeToFIFO()
-{
-    u32 vacancy = 0x0;
-    
-    //block until FIFO is free
-    do  {   vacancy = XLlFifo_ReadReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFV_OFFSET); }
-    while (vacancy < sizeof(increment));
-
-    XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TDFD_OFFSET, increment);
-    XLlFifo_WriteReg(XPAR_AXI_FIFO_MM_S_0_BASEADDR, XLLF_TLF_OFFSET, sizeof(increment));
-}
-
-/*
- * @brief: Set 32-bit value phase increment for input to DDS
- *         based on current frequency. 
- */
-void setPhaseIncrement() 
+int32_t getIncrement(int32_t freq) 
 {   
-    int64_t freqTemp = (int64_t)frequency;
+    int64_t freqTemp = (int64_t)freq;
     int64_t result = (freqTemp * 134217728) / 125000000; 
-    increment = (int32_t)result; 
+    return (int32_t)result; 
 }
 
 /*
@@ -119,19 +102,13 @@ void performReset()
     XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA_OFFSET, 0x0);
     usleep(1);
     XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA_OFFSET, 0x1);
-    print("\tReseting DDS....\n\r"); 
 }
 
 /*
- *  @brief: Display new frequency and increment
+ *  @brief: Display new frequency
  */
 void displayValues()
-{
-    print("\n\r\tupdating frequency:\n\r");
-    printf("\tfreq\t= %d\n\r", frequency); 
-    printf("\tphase_inc = %d\n\r", increment);   
-    print("\n\r\n\r");
-}
+{   printf("\n\r\tCurrent Frequency is %d Hz\n\r", frequency);  }
 
 /*
  *  @brief: Display audio system menu
@@ -140,12 +117,12 @@ void displayMenu()
 {
     print("\n\r\n\rName: Elhyanah Desir\n\r"); 
     print("Welcome to audio system.\n\r"); 
-    print("\tPress 'f' to tune to a new frequency.\n\r");
-    print("\tPress 'U/u' to increase frequency by 1000/100 Hz.\n\r");
-    print("\tPress 'D/d' to decrease frequency by 1000/100 Hz.\n\r");
-    print("\tPress 'r' to reset the phase.\n\r");
-    print("\tPress [space] to repeat this menu.\n\r"); 
-    print("\tSet SW0 to 0 for Unfiltered or to 1 for Filtered data.\n\r");    
+    print("\tPress 't' to tune radio to a new frequency.\n\r");
+    print("\tPress 'f' to set the fake ADC to a new frequency.\n\r");
+    print("\tPress 'U/u' to increase fake ADC frequency by 1000/100 Hz.\n\r");
+    print("\tPress 'D/d' to decrease fake ADC frequency by 1000/100 Hz.\n\r");
+    print("\tPress +/- to increase/decrease volume.\n\r");
+    print("\tPress [space] to repeat this menu.\n\r");    
 }
 
 /*
@@ -154,9 +131,9 @@ void displayMenu()
  *          not numeric else prints updated phase and frequency.
  *          If given frequency exceeds max 
  */
-void getFrequency()
+int32_t getFrequency()
 {
-    frequency = 0;
+    print("\n\r\tEnter a frequency in Hz: ");
     size_t lengthMax = 9;
     size_t wordLength = 0;
     char *word = (char *)malloc(lengthMax);
@@ -178,7 +155,7 @@ void getFrequency()
             else 
             {
                 print("\n\r\tNot a valid character, no frequency loaded\n\r");
-                return;
+                return -1;
             }
 
             // Expand maxmimum length if needed
@@ -197,12 +174,17 @@ void getFrequency()
     free(word);   
 
     if(newFrequency > 100000000 || wordLength > 9)
-    {   print("\n\r\tFrequency can't be larger than 100000000.\n\r");   }
+    {   
+        print("\n\r\tFrequency can't be larger than 100000000.\n\r");   
+        return -1;
+    }
+    else if (wordLength == 0)
+    {
+        print("\n\r\tNo value provided, no frequency loaded\n\r");
+        return -1;
+    }
     else 
-    {   frequency = (int32_t)newFrequency;  }
-
-    setPhaseIncrement();
-    displayValues();
+    {   return (int32_t)newFrequency;  }
 }
 
 int main()
@@ -213,12 +195,16 @@ int main()
 
     displayMenu(); 
 
-    frequency = 1000;
-    setPhaseIncrement();
+    frequency = 3001000;
+    tune = 3000000;
+    XGpio_WriteReg(XPAR_AXI_GPIO_1_BASEADDR, XGPIO_DATA_OFFSET, getIncrement(frequency));
+    XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA2_OFFSET, getIncrement(tune));
+    printf("\n\r\n\r\tCurrent frequency set to %d Hz\n\r", frequency);
     performReset(); 
 
     //Loop through and perform whatever specified actions
     //based on the character that was sent over UART    
+    int32_t temp = 0;
     while(1)
     {
         if(XUartPs_IsReceiveData(XPAR_XUARTPS_0_BASEADDR))  
@@ -229,9 +215,24 @@ int main()
             {
                 // Set frequency based on given user input
                 case 'f':
-                    print("\n\r\tEnter a frequency in Hz: ");
-                    getFrequency();                
+                    temp = getFrequency(); 
+                    if(temp != -1)  
+                    {
+                        frequency = temp;
+                        XGpio_WriteReg(XPAR_AXI_GPIO_1_BASEADDR, XGPIO_DATA_OFFSET, getIncrement(frequency));                        
+                        displayValues(); 
+                    }            
                     break;
+
+                case 't':
+                    temp = getFrequency(); 
+                    if(temp != -1)  
+                    {  
+                        tune = temp;
+                        XGpio_WriteReg(XPAR_AXI_GPIO_0_BASEADDR, XGPIO_DATA2_OFFSET, getIncrement(tune));
+                        printf("\n\r\tTuned radio to %d Hz\n\r", tune);
+                    } 
+                    break;                
 
                 // When 'D' decrease by 1000 Hz
                 case 'D':
@@ -243,7 +244,7 @@ int main()
                         print("\n\r\tMinimum frequency is 0 Hz.\n\r"); 
                     } 
 
-                    setPhaseIncrement();
+                    XGpio_WriteReg(XPAR_AXI_GPIO_1_BASEADDR, XGPIO_DATA_OFFSET, getIncrement(frequency));
                     displayValues();               
                     break;
                 
@@ -257,7 +258,7 @@ int main()
                         print("\n\r\tMinimum frequency is 0 Hz.\n\r"); 
                     }
 
-                    setPhaseIncrement();
+                    XGpio_WriteReg(XPAR_AXI_GPIO_1_BASEADDR, XGPIO_DATA_OFFSET, getIncrement(frequency));
                     displayValues(); 
                     break;
 
@@ -271,7 +272,7 @@ int main()
                         printf("\n\r\tMaximum frequency is %d Hz.\n\r", MAX);   
                     }
 
-                    setPhaseIncrement();
+                    XGpio_WriteReg(XPAR_AXI_GPIO_1_BASEADDR, XGPIO_DATA_OFFSET, getIncrement(frequency));
                     displayValues();               
                     break;
                 
@@ -285,11 +286,34 @@ int main()
                         printf("\n\r\tMaximum frequency is %d Hz.\n\r", MAX);  
                     }
 
-                    setPhaseIncrement();
+                    XGpio_WriteReg(XPAR_AXI_GPIO_1_BASEADDR, XGPIO_DATA_OFFSET, getIncrement(frequency));
                     displayValues(); 
                     break;
+                
+                //Increase Volume of Audio Signal
+                case '+':
+                    if(volume_index < 9)
+                    {   
+                        volume_index++;   
+                        setVolume();
+                        printf("\n\rSetting volume to %d.", volume_index);
+                    }
+                    else 
+                    {   printf("\n\rVolume already at Max (%d).", volume_index);  }
+                    break;
 
-                // When 'r' pressed redisplay menu
+                case '-':
+                    if (volume_index > 0)
+                    {
+                        volume_index--;
+                        setVolume();
+                        printf("\n\rSetting volume to %d.", volume_index);
+                    }
+                    else 
+                    {   printf("\n\rVolume already at Min (%d).", volume_index);    }
+                    break;
+
+                // When 'r' pressed reset DDS
                 case 'r':
                     performReset(); 
                     break;
@@ -300,8 +324,6 @@ int main()
                     break;
             }
         }   
-
-        writeToFIFO();
     }
 
     cleanup_platform();

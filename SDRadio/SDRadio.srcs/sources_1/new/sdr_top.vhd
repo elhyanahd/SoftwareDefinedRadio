@@ -61,21 +61,31 @@ architecture Behavioral of sdr_top is
     signal switches    : std_logic_vector(3 downto 0);
     
     -- SW[0] for FIR Compiler application
-    signal filter_sel : std_logic;
-     signal filter_ready : std_logic_vector(31 downto 0) := (others => '0');
+    signal filtered : std_logic_vector(31 downto 0);
+    signal filter_data_real, filter_data_imag : std_logic_vector(15 downto 0);
+     
+    -- signal from Complex Multiplier (for DDS Mix)
+    signal mixed_wave_data : std_logic_vector(31 downto 0);
+    signal mixed_wave_valid : std_logic;
 
+    --signals from DDS Complex
+    signal complex_wave_valid : std_logic;
+    signal complex_wave_data : std_logic_vector(31 downto 0); 
+    
+    --signals from Fake ADC
+    signal adc_data_16bit :std_logic_vector(15 downto 0);
+    signal adc_data_32bit :std_logic_vector(31 downto 0);
+    signal adc_data_valid : std_logic;
     
     -- signals to/from DAC Interface 
     signal lrclk, bclk, mclk, sdata, latched_data : std_logic;
-    signal dac_data_word, filtered, unfiltered : std_logic_vector(31 downto 0);
-    signal dds_ready, dds_ready_reg, dds_sample :std_logic_vector(15 downto 0);
+    signal dac_data_word : std_logic_vector(31 downto 0);
     signal dac_data_index_reg : integer range 0 to 31;
     signal dac_data_index : std_logic_vector(31 downto 0);
-    signal dds_data_valid : std_logic;
-    
-    -- signal to/from DDS Compiler
-    signal phase_increment, phase_ready : std_logic_vector(31 downto 0);
-    signal increment_valid, ps7_reset : std_logic;
+        
+    -- signal to/from DDS Compilers
+    signal phase_increment, tune_increment : std_logic_vector(31 downto 0);
+    signal ps7_reset : std_logic;
     
     -- signals for SCL and SDA IOBUFs 
     signal hdmi_in_ddc_scl_i : STD_LOGIC;
@@ -126,12 +136,10 @@ architecture Behavioral of sdr_top is
         hdmi_in_ddc_sda_i : in STD_LOGIC;
         hdmi_in_ddc_sda_o : out STD_LOGIC;
         hdmi_in_ddc_sda_t : out STD_LOGIC;
-        M_AXIS_0_tvalid : out STD_LOGIC;
-        M_AXIS_0_tready : in STD_LOGIC;
-        M_AXIS_0_tdata : out STD_LOGIC_VECTOR ( 31 downto 0 );
+        phase_increment : out STD_LOGIC_VECTOR ( 31 downto 0 );
         m_axis_aclk_0 : in STD_LOGIC;
-        m_axis_aresetn_0 : in STD_LOGIC;
-        ps7_reset : out STD_LOGIC);
+        ps7_reset : out STD_LOGIC;
+        tune_increment : out STD_LOGIC_VECTOR ( 31 downto 0 ));
       end component lab2_proc_system;
       
       -- component for DDS Compiler
@@ -145,18 +153,43 @@ architecture Behavioral of sdr_top is
         m_axis_data_tdata : OUT STD_LOGIC_VECTOR(15 DOWNTO 0));
       end component;
       
+    component dds_compiler_1
+      port (
+        aclk : IN STD_LOGIC;
+        aresetn : IN STD_LOGIC;
+        s_axis_phase_tvalid : IN STD_LOGIC;
+        s_axis_phase_tdata : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+        m_axis_data_tvalid : OUT STD_LOGIC;
+        m_axis_data_tdata : OUT STD_LOGIC_VECTOR(31 DOWNTO 0) 
+      );
+    end component;
+    
+    component cmpy_0
+      port (
+        aclk : IN STD_LOGIC;
+        s_axis_a_tvalid : IN STD_LOGIC;
+        s_axis_a_tdata : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+        s_axis_b_tvalid : IN STD_LOGIC;
+        s_axis_b_tdata : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+        m_axis_dout_tvalid : OUT STD_LOGIC;
+        m_axis_dout_tdata : OUT STD_LOGIC_VECTOR(31 DOWNTO 0) 
+      );
+    end component;
+      
       -- component for ILA
       component ila_0
         port (
             clk : in std_logic;
             probe0 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-            probe1 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
+            probe1 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
             probe2 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
             probe3 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
             probe4 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
             probe5 : IN STD_LOGIC_VECTOR(0 DOWNTO 0); 
             probe6 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-            probe7 : IN STD_LOGIC_VECTOR(31 DOWNTO 0));
+            probe7 : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+            probe8 : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+            probe9 : IN STD_LOGIC_VECTOR(31 DOWNTO 0));
       end component;
 begin
     --------------------------------------------
@@ -174,7 +207,7 @@ begin
     ------- DAC Interface Implementation -------
     --------------------------------------------
     
-    dac_data_word <= filtered when (switches(0) = '1') else unfiltered;
+    dac_data_word <= filtered;
      
     dac_intfc : entity work.lowlevel_dac_intfc(Behavioral) 
                 port map (resetn => resetn,
@@ -213,9 +246,7 @@ begin
       FIXED_IO_ps_clk => FIXED_IO_ps_clk,
       FIXED_IO_ps_porb => FIXED_IO_ps_porb,
       FIXED_IO_ps_srstb => FIXED_IO_ps_srstb,
-      M_AXIS_0_tdata(31 downto 0) => phase_ready,
-      M_AXIS_0_tready => '1',
-      M_AXIS_0_tvalid => increment_valid,
+      phase_increment(31 downto 0) => phase_increment,
       hdmi_in_ddc_scl_i => hdmi_in_ddc_scl_i,
       hdmi_in_ddc_scl_o => hdmi_in_ddc_scl_o,
       hdmi_in_ddc_scl_t => hdmi_in_ddc_scl_t,
@@ -223,59 +254,65 @@ begin
       hdmi_in_ddc_sda_o => hdmi_in_ddc_sda_o,
       hdmi_in_ddc_sda_t => hdmi_in_ddc_sda_t,
       m_axis_aclk_0 => clk,
-      m_axis_aresetn_0 => resetn,
-      ps7_reset => ps7_reset);
-      
+      ps7_reset => ps7_reset,
+      tune_increment => tune_increment);
+     
     --------------------------------------------
-    ------- DDS Compiler Implementation --------
-    --------------------------------------------
-    -- DDS output register
-    phase_reg : process(clk)
-    begin
-        if rising_edge(clk) then
-            if resetn = '0' then
-                phase_increment <= (others => '0');
-            elsif increment_valid = '1' then
-                phase_increment <= phase_ready; -- Only latch stable sample
-            end if;
-        end if;
-    end process;
-      
-    dds_gen : dds_compiler_0
+    ------- Fake ADC (DDS) Implementation ------
+    -------------------------------------------- 
+    adc_gen : dds_compiler_0
       port map (
         aclk => clk,
         aresetn => ps7_reset,
         s_axis_phase_tvalid => '1',
         s_axis_phase_tdata => phase_increment,
-        m_axis_data_tvalid => dds_data_valid,
-        m_axis_data_tdata => dds_ready);
+        m_axis_data_tvalid => adc_data_valid,
+        m_axis_data_tdata => adc_data_16bit);
         
-    -- DDS output register
-    dds_reg : process(clk)
-    begin
-        if rising_edge(clk) then
-            if resetn = '0' then
-                dds_sample <= (others => '0');
-            elsif dds_data_valid = '1' then
-                if latched_data = '1' then
-                    dds_sample <= dds_ready; -- Only latch stable sample
-                end if;
-            end if;
-        end if;
-    end process;
+    adc_data_32bit <= adc_data_16bit & x"0000";
     
-    -- Combine into full 32-bit word (duplicate for both channels)
-    unfiltered <= dds_sample & dds_sample;
+    --------------------------------------------
+    ------- DDS Complex Implementation ---------
+    --------------------------------------------
+    complex_gen : dds_compiler_1
+      port map (
+        aclk => clk,
+        aresetn => ps7_reset,
+        s_axis_phase_tvalid => '1',
+        s_axis_phase_tdata => tune_increment,
+        m_axis_data_tvalid => complex_wave_valid,
+        m_axis_data_tdata => complex_wave_data);
+        
+    --------------------------------------------
+    ----- DDS Mix Multiplier Implementation ----
+    --------------------------------------------
+    
+    dds_mix : cmpy_0
+      port map (
+        aclk => clk,
+        s_axis_a_tvalid => adc_data_valid,
+        s_axis_a_tdata => adc_data_32bit,
+        s_axis_b_tvalid => complex_wave_valid,
+        s_axis_b_tdata => complex_wave_data,
+        m_axis_dout_tvalid => mixed_wave_valid,
+        m_axis_dout_tdata => mixed_wave_data);
     
     --------------------------------------------
     ---------- Filter  Implementation ----------
     --------------------------------------------
-    filter_intfc : entity work.filter_design(Behavioral)
+    filter_imag : entity work.filter_design(Behavioral)
         port map ( clk => clk,
                    resetn => resetn,
-                   dds_data => dds_ready,
-                   dds_valid => dds_data_valid,
-                   dac_data => filter_ready);
+                   dds_data => mixed_wave_data(31 downto 16),
+                   dds_valid => mixed_wave_valid,
+                   dac_data => filter_data_imag);
+                   
+    filter_real : entity work.filter_design(Behavioral)
+        port map ( clk => clk,
+                   resetn => resetn,
+                   dds_data => mixed_wave_data(15 downto 0),
+                   dds_valid => mixed_wave_valid,
+                   dac_data => filter_data_real);
                        
     process(clk)
     begin
@@ -283,7 +320,7 @@ begin
             if resetn = '0' then
                 filtered <= (others => '0');
             elsif latched_data = '1' then
-                filtered <= filter_ready;
+                filtered <= filter_data_real & filter_data_imag;
             end if;
         end if;
     end process;
@@ -323,12 +360,14 @@ begin
     ila_inst : ila_0
         port map (
             clk => CLK125MHZ,
-            probe0 => unfiltered,
-            probe1(0) => sdata,
+            probe0 => mixed_wave_data,
+            probe1 => phase_increment,
             probe2(0) => lrclk,
             probe3(0) => bclk,
             probe4(0) => ps7_reset,
             probe5(0) => latched_data,
-            probe6 => dds_sample,
-            probe7 => filtered);  
+            probe6 => adc_data_16bit,
+            probe7 => filtered,
+            probe8 => tune_increment,
+            probe9 => complex_wave_data);  
 end Behavioral;
