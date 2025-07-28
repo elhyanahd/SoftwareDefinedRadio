@@ -61,12 +61,12 @@ architecture Behavioral of sdr_top is
     signal switches    : std_logic_vector(3 downto 0);
     
     -- SW[0] for FIR Compiler application
-    signal filtered : std_logic_vector(31 downto 0);
+    signal filtered, latched_mixed_data: std_logic_vector(31 downto 0);
     signal filter_data_real, filter_data_imag : std_logic_vector(15 downto 0);
      
     -- signal from Complex Multiplier (for DDS Mix)
-    signal mixed_wave_data : std_logic_vector(31 downto 0);
-    signal mixed_wave_valid : std_logic;
+    signal mixed_wave_data : std_logic_vector(79 downto 0);
+    signal mixed_wave_valid, latched_mixed_valid : std_logic;
 
     --signals from DDS Complex
     signal complex_wave_valid : std_logic;
@@ -172,9 +172,23 @@ architecture Behavioral of sdr_top is
         s_axis_b_tvalid : IN STD_LOGIC;
         s_axis_b_tdata : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
         m_axis_dout_tvalid : OUT STD_LOGIC;
-        m_axis_dout_tdata : OUT STD_LOGIC_VECTOR(31 DOWNTO 0) 
+        m_axis_dout_tdata : OUT STD_LOGIC_VECTOR(79 DOWNTO 0) 
       );
     end component;
+    
+    component lowlevel_dac_intfc_0
+      port (
+        resetn : IN STD_LOGIC;
+        clk125 : IN STD_LOGIC;
+        data_word : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+        sdata : OUT STD_LOGIC;
+        lrck : OUT STD_LOGIC;
+        bclk : OUT STD_LOGIC;
+        mclk : OUT STD_LOGIC;
+        latched_data : OUT STD_LOGIC;
+        valid : IN STD_LOGIC 
+      );
+    end component;   
       
       -- component for ILA
       component ila_0
@@ -209,16 +223,16 @@ begin
     
     dac_data_word <= filtered;
      
-    dac_intfc : entity work.lowlevel_dac_intfc(Behavioral) 
+    dac_intfc : lowlevel_dac_intfc_0
                 port map (resetn => resetn,
-                          clk => clk,
+                          clk125 => clk,
                           data_word => dac_data_word,
                           sdata => sdata,
-                          lrclk => lrclk,
+                          lrck => lrclk,
                           bclk => bclk,
                           mclk => mclk,
-                          index => dac_data_index_reg,
-                          latched_data => latched_data);
+                          latched_data => latched_data,
+                          valid => '1');
                           
     --------------------------------------------
     ---- Zynq Process System Implementation ----
@@ -269,7 +283,7 @@ begin
         m_axis_data_tvalid => adc_data_valid,
         m_axis_data_tdata => adc_data_16bit);
         
-    adc_data_32bit <= adc_data_16bit & x"0000";
+    adc_data_32bit <= adc_data_16bit & adc_data_16bit;
     
     --------------------------------------------
     ------- DDS Complex Implementation ---------
@@ -296,21 +310,23 @@ begin
         s_axis_b_tdata => complex_wave_data,
         m_axis_dout_tvalid => mixed_wave_valid,
         m_axis_dout_tdata => mixed_wave_data);
-    
+        
+    latched_mixed_data(15 downto 0) <= mixed_wave_data(29 downto 14);
+    latched_mixed_data(31 downto 16) <= mixed_wave_data(69 downto 54);
     --------------------------------------------
     ---------- Filter  Implementation ----------
     --------------------------------------------
     filter_imag : entity work.filter_design(Behavioral)
         port map ( clk => clk,
                    resetn => resetn,
-                   dds_data => mixed_wave_data(31 downto 16),
+                   dds_data => latched_mixed_data(31 downto 16),
                    dds_valid => mixed_wave_valid,
                    dac_data => filter_data_imag);
                    
     filter_real : entity work.filter_design(Behavioral)
         port map ( clk => clk,
                    resetn => resetn,
-                   dds_data => mixed_wave_data(15 downto 0),
+                   dds_data => latched_mixed_data(15 downto 0),
                    dds_valid => mixed_wave_valid,
                    dac_data => filter_data_real);
                        
@@ -320,7 +336,7 @@ begin
             if resetn = '0' then
                 filtered <= (others => '0');
             elsif latched_data = '1' then
-                filtered <= filter_data_real & filter_data_imag;
+                filtered <= filter_data_imag & filter_data_real;
             end if;
         end if;
     end process;
@@ -360,7 +376,7 @@ begin
     ila_inst : ila_0
         port map (
             clk => CLK125MHZ,
-            probe0 => mixed_wave_data,
+            probe0 => x"00000000",
             probe1 => phase_increment,
             probe2(0) => lrclk,
             probe3(0) => bclk,
