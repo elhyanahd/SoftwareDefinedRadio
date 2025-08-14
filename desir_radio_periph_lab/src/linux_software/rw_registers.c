@@ -11,6 +11,10 @@
 #define RADIO_TUNER_CONTROL_REG_OFFSET 2
 #define RADIO_TUNER_TIMER_REG_OFFSET 3
 #define RADIO_PERIPH_ADDRESS 0x43c00000
+#define ENABLE_FIFO_ADDRESS 0x41200000
+
+#define XLLF_RDFR_OFFSET 6  /**< Receive Reset */
+#define FIFO_BASEADDR 0x43c10000
 
 // the below code uses a device called /dev/mem to get a pointer to a physical
 // address.  We will use this pointer to read/write the custom peripheral
@@ -32,14 +36,15 @@ int32_t getIncrement(int32_t freq)
 
 int main(int argc, char *argv[])
 {
-    if (argc < 3) 
+    if (argc < 4) 
     {
-        printf("Usage: %s <adc_freq_hz> <tune_freq_hz>\n", argv[0]);
+        printf("Usage: %s <adc_freq_hz> <tune_freq_hz> <udp_enable>\n", argv[0]);
         return 1;
     }
 
     unsigned int adc_freq = (unsigned int)strtoul(argv[1], NULL, 10);
     unsigned int tune_freq = (unsigned int)strtoul(argv[2], NULL, 10);
+    unsigned int enable = (unsigned int)strtoul(argv[3], NULL, 10);
 
     if(adc_freq > 100000000 || tune_freq > 100000000)
     {
@@ -47,6 +52,11 @@ int main(int argc, char *argv[])
         printf("The frequencies can't be larger than 100000000\n");
         return 1;
     }
+
+    volatile unsigned int *fifo_periph = get_a_pointer(FIFO_BASEADDR);
+    volatile unsigned int *enable_udp = get_a_pointer(ENABLE_FIFO_ADDRESS);	
+    *(fifo_periph+XLLF_RDFR_OFFSET) = 0xA5;      // Reset FIFO
+    *(enable_udp) = (int)enable;                //set UDP enable bit
 
     volatile unsigned int *my_periph = get_a_pointer(RADIO_PERIPH_ADDRESS);	
     *(my_periph+RADIO_TUNER_CONTROL_REG_OFFSET) = 0; // make sure radio isn't in reset

@@ -80,7 +80,14 @@ architecture STRUCTURE of design_1_wrapper is
     FIXED_IO_ps_srstb : inout STD_LOGIC;
     FIXED_IO_ps_clk : inout STD_LOGIC;
     FIXED_IO_ps_porb : inout STD_LOGIC;
-    axi_str_rxd_tlast_0 : in STD_LOGIC
+    axi_str_rxd_tlast_0 : in STD_LOGIC;
+    AXI_STR_RXD_0_tdata : in STD_LOGIC_VECTOR ( 31 downto 0 );
+    AXI_STR_RXD_0_tready : out STD_LOGIC;
+    AXI_STR_RXD_0_tvalid : in STD_LOGIC;
+    enable_fifo_tri_o : out STD_LOGIC_VECTOR ( 0 to 0 );
+    M01_AXIS_0_tdata : out STD_LOGIC_VECTOR ( 31 downto 0 );
+    M01_AXIS_0_tready : in STD_LOGIC_VECTOR ( 0 to 0 );
+    M01_AXIS_0_tvalid : out STD_LOGIC_VECTOR ( 0 to 0 )
   );
   end component design_1;
   component IOBUF is
@@ -97,6 +104,11 @@ architecture STRUCTURE of design_1_wrapper is
   signal IIC_0_sda_i : STD_LOGIC;
   signal IIC_0_sda_o : STD_LOGIC;
   signal IIC_0_sda_t : STD_LOGIC;
+  
+  -- signals to connect radio periph to DAC and FIFO
+  signal radio_periph_data, fifo_data_in : std_logic_vector(31 downto 0);
+  signal radio_periph_valid, fifo_ready : std_logic;
+  signal enable_udp, enable_fifo, dac_ready : std_logic;
 begin
 IIC_0_scl_iobuf: component IOBUF
      port map (
@@ -146,8 +158,17 @@ design_1_i: component design_1
       mclk => mclk,
       sdata => sdata,
       clk125 => clk125,
-      axi_str_rxd_tlast_0 => '1'
+      axi_str_rxd_tlast_0 => '1',
+      AXI_STR_RXD_0_tdata => radio_periph_data,
+      AXI_STR_RXD_0_tready => fifo_ready,
+      AXI_STR_RXD_0_tvalid => enable_udp,
+      enable_fifo_tri_o(0) => enable_fifo,
+      M01_AXIS_0_tdata => radio_periph_data,
+      M01_AXIS_0_tready(0) => fifo_ready,
+      M01_AXIS_0_tvalid(0) => radio_periph_valid
     );
     
+enable_udp <= radio_periph_valid when enable_fifo = '1' else '0';
+
 ac_muten <= '1';    
 end STRUCTURE;

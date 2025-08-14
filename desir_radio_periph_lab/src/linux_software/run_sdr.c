@@ -20,8 +20,6 @@
 #define XLLF_RDFD_OFFSET 8  /**< Receive Data */
 #define FIFO_BASEADDR 0x43c10000
 
-#define ENABLE_FIFO_BASEADDR 0x41200000
-
 #define DEST_PORT 25344           // Target port
 #define PACKET_MAX 1028
 #define SAMPLE_MAX 256
@@ -37,17 +35,7 @@ volatile unsigned int * get_a_pointer(unsigned int phys_addr)
 	return (radio_base);
 }
 
-void configureRadio()
-{
-    volatile unsigned int *radio_periph = get_a_pointer(RADIO_PERIPH_ADDRESS);	
-    
-    *(radio_periph+RADIO_TUNER_CONTROL_REG_OFFSET) = 0; // make sure radio isn't in reset
-    *(radio_periph+RADIO_TUNER_TUNER_PINC_OFFSET)= 0; //set tune to 0 Hz
-    *(radio_periph+RADIO_TUNER_CONTROL_REG_OFFSET) = 1; // reset 
-    *(radio_periph+RADIO_TUNER_FAKE_ADC_PINC_OFFSET) = 1073; //set fake adc to ~1000 Hz
-}
-
-void sendUDP(const struct in_addr *ip_addr, volatile unsigned int *my_periph, int packetAmount)
+void sendUDP(const struct in_addr *ip_addr, volatile unsigned int *my_periph)
 {
     // Set up UDP socket
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -67,7 +55,7 @@ void sendUDP(const struct in_addr *ip_addr, volatile unsigned int *my_periph, in
     uint32_t packetCounter = 0;
     uint8_t packet[PACKET_MAX];
 
-    for (int p = 0; p < packetAmount; ++p)
+    while(1)
     {
         // Write 32-bit counter (little-endian)
         packet[0] = (packetCounter >> 0) & 0xFF;
@@ -96,6 +84,8 @@ void sendUDP(const struct in_addr *ip_addr, volatile unsigned int *my_periph, in
 
                 wordCount++;
             }
+            else 
+            {   usleep(20.49);     } // avoid 100% CPU spin
         }
 
         ssize_t sent = sendto(sockfd, packet, PACKET_MAX, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
@@ -105,42 +95,22 @@ void sendUDP(const struct in_addr *ip_addr, volatile unsigned int *my_periph, in
             break;
         }
 
-        printf("Sent packet %u (%ld bytes)\n", packetCounter, sent);
         packetCounter++;
     }
 
     close(sockfd);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    // Required CGI header
-    printf("Content-type: text/html\n\n");
-
-    // Get QUERY_STRING, e.g. "ip=192.168.1.42&packets=100"
-    char *qs = getenv("QUERY_STRING");
-    if (!qs) {
-        printf("<p>Error: No query string provided.</p>");
+    if (argc < 2) 
+    {
+        printf("Usage: %s <destination ip>\n", argv[0]);
         return 1;
     }
 
-    // Parse query string
-    char destIP[64] = {0};
-    int packets = 0;
-
-    // Expect ip=...&packets=...
-    if (sscanf(qs, "ip=%63[^&]&packets=%d", destIP, &packets) != 2) {
-        printf("<p>Error: Invalid parameters. Expected ?ip=<addr>&packets=<num></p>");
-        return 1;
-    }
-
-    // Validate packet count
-    if (packets <= 0) {
-        printf("<p>Error: Invalid packet amount (%d).</p>", packets);
-        return 1;
-    }
-
-    // Validate IP address
+    //store and verify input ip address
+    char* destIP = argv[1];
     struct in_addr ip_check;
     if (inet_pton(AF_INET, destIP, &ip_check) != 1) 
     {
@@ -150,17 +120,8 @@ int main()
 
     // first, get a pointer to the peripheral base address using /dev/mem and the function mmap
     volatile unsigned int *my_periph = get_a_pointer(FIFO_BASEADDR);
-    volatile unsigned int *enable_udp = get_a_pointer(ENABLE_FIFO_BASEADDR);
 
-    *(my_periph+XLLF_RDFR_OFFSET) = 0xA5;               //Reset FIFO
-    *(enable_udp) = 1;      //make sure FIFO valid is being driven so FIFO can receive data
-
-    configureRadio();
-    sendUDP(&ip_check, my_periph, packets);
-
-    volatile unsigned int *radio_periph = get_a_pointer(RADIO_PERIPH_ADDRESS);
-    *(radio_periph+RADIO_TUNER_FAKE_ADC_PINC_OFFSET) = 0; //stop the sound
-    *(enable_udp) = 0;      //stop FIFO from receiving data
+    sendUDP(&ip_check, my_periph);
 
     return 0;
 }

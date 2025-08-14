@@ -13,8 +13,9 @@
 #define XLLF_RDFR_OFFSET 6  /**< Receive Reset */
 #define XLLF_RDFO_OFFSET 7  /**< Receive Occupancy */
 #define XLLF_RDFD_OFFSET 8  /**< Receive Data */
-
 #define FIFO_BASEADDR 0x43c10000
+
+#define ENABLE_FIFO_BASEADDR 0x41200000
 
 // the below code uses a device called /dev/mem to get a pointer to a physical
 // address.  We will use this pointer to read/write the custom peripheral
@@ -29,6 +30,8 @@ volatile unsigned int * get_a_pointer(unsigned int phys_addr)
 
 int main()
 {
+    printf("Content-type: text/html\n\n");
+    
     unsigned int occupancy = 0;
     unsigned int dataWord = 0;
     int wordCount = 0;
@@ -36,6 +39,10 @@ int main()
     // first, get a pointer to the peripheral base address using /dev/mem and the function mmap
     volatile unsigned int *my_periph = get_a_pointer(FIFO_BASEADDR);
     volatile unsigned int *radio_periph = get_a_pointer(RADIO_PERIPH_ADDRESS);	
+    volatile unsigned int *enable_udp = get_a_pointer(ENABLE_FIFO_BASEADDR);
+
+    *(my_periph+XLLF_RDFR_OFFSET) = 0xA5;               //Reset FIFO
+    *(enable_udp) = 1;      //make sure FIFO valid is being driven so FIFO can receive data
     
     *(radio_periph+RADIO_TUNER_CONTROL_REG_OFFSET) = 0; // make sure radio isn't in reset
     *(radio_periph+RADIO_TUNER_TUNER_PINC_OFFSET)= 0; //set tune to 0 Hz
@@ -60,7 +67,8 @@ int main()
             wordCount++;
         }
     }
-
+    *(radio_periph+RADIO_TUNER_FAKE_ADC_PINC_OFFSET) = 0; //stop sound
+    *(enable_udp) = 0;      //stop FIFO from receiving data
     printf("Finished reading %d FIFO samples.\n", 480000);
 
     return 0;

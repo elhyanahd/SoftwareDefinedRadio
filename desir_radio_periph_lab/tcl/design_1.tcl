@@ -135,8 +135,9 @@ xilinx.com:ip:processing_system7:5.5\
 xilinx.com:ip:proc_sys_reset:5.0\
 xilinx.com:ip:system_ila:1.1\
 xilinx.com:ip:xpm_cdc_gen:1.0\
-xilinx.com:ip:axis_broadcaster:1.1\
 xilinx.com:ip:axi_fifo_mm_s:4.3\
+  xilinx.com:ip:axi_gpio:2.0\
+  xilinx.com:ip:axis_broadcaster:1.1\
 "
 
    set list_ips_missing ""
@@ -206,11 +207,33 @@ proc create_root_design { parentCell } {
 
   set IIC_0 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:iic_rtl:1.0 IIC_0 ]
 
+set AXI_STR_RXD_0 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 AXI_STR_RXD_0 ]
+  set_property -dict [ list \
+   CONFIG.FREQ_HZ {125000000} \
+   CONFIG.HAS_TKEEP {0} \
+   CONFIG.HAS_TLAST {1} \
+   CONFIG.HAS_TREADY {1} \
+   CONFIG.HAS_TSTRB {0} \
+   CONFIG.LAYERED_METADATA {undef} \
+   CONFIG.TDATA_NUM_BYTES {4} \
+   CONFIG.TDEST_WIDTH {0} \
+   CONFIG.TID_WIDTH {0} \
+   CONFIG.TUSER_WIDTH {0} \
+   ] $AXI_STR_RXD_0
+
+  set enable_fifo [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:gpio_rtl:1.0 enable_fifo ]
+
+  set M01_AXIS_0 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 M01_AXIS_0 ]
+  set_property -dict [ list \
+   CONFIG.FREQ_HZ {125000000} \
+   ] $M01_AXIS_0
+
 
   # Create ports
   set bclk [ create_bd_port -dir O bclk ]
   set clk125 [ create_bd_port -dir I -type clk -freq_hz 125000000 clk125 ]
   set_property -dict [ list \
+   CONFIG.ASSOCIATED_BUSIF {AXI_STR_RXD_0:M01_AXIS_0} \
    CONFIG.FREQ_TOLERANCE_HZ {-1} \
  ] $clk125
   set lrck [ create_bd_port -dir O lrck ]
@@ -578,7 +601,7 @@ proc create_root_design { parentCell } {
 
   # Create instance: ps7_0_axi_periph, and set properties
   set ps7_0_axi_periph [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 ps7_0_axi_periph ]
-  set_property CONFIG.NUM_MI {2} $ps7_0_axi_periph
+  set_property CONFIG.NUM_MI {3} $ps7_0_axi_periph
 
 
   # Create instance: rst_ps7_0_125M, and set properties
@@ -605,6 +628,25 @@ proc create_root_design { parentCell } {
   ] $xpm_cdc_gen_0
 
 
+  # Create instance: axi_fifo_mm_s_0, and set properties
+  set axi_fifo_mm_s_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_fifo_mm_s:4.3 axi_fifo_mm_s_0 ]
+  set_property -dict [list \
+    CONFIG.C_USE_TX_CTRL {0} \
+    CONFIG.C_USE_TX_DATA {0} \
+  ] $axi_fifo_mm_s_0
+
+
+  # Create instance: rst_clk125_125M, and set properties
+  set rst_clk125_125M [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_clk125_125M ]
+
+  # Create instance: axi_gpio_0, and set properties
+  set axi_gpio_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_0 ]
+  set_property -dict [list \
+    CONFIG.C_ALL_OUTPUTS {1} \
+    CONFIG.C_GPIO_WIDTH {1} \
+  ] $axi_gpio_0
+
+
   # Create instance: axis_broadcaster_0, and set properties
   set axis_broadcaster_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_broadcaster:1.1 axis_broadcaster_0 ]
   set_property -dict [list \
@@ -621,20 +663,11 @@ proc create_root_design { parentCell } {
   ] $axis_broadcaster_0
 
 
-  # Create instance: axi_fifo_mm_s_0, and set properties
-  set axi_fifo_mm_s_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_fifo_mm_s:4.3 axi_fifo_mm_s_0 ]
-  set_property -dict [list \
-    CONFIG.C_USE_TX_CTRL {0} \
-    CONFIG.C_USE_TX_DATA {0} \
-  ] $axi_fifo_mm_s_0
-
-
-  # Create instance: rst_clk125_125M, and set properties
-  set rst_clk125_125M [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_clk125_125M ]
-
   # Create interface connections
+  connect_bd_intf_net -intf_net AXI_STR_RXD_0_1 [get_bd_intf_ports AXI_STR_RXD_0] [get_bd_intf_pins axi_fifo_mm_s_0/AXI_STR_RXD]
+  connect_bd_intf_net -intf_net axi_gpio_0_GPIO [get_bd_intf_ports enable_fifo] [get_bd_intf_pins axi_gpio_0/GPIO]
   connect_bd_intf_net -intf_net axis_broadcaster_0_M00_AXIS [get_bd_intf_pins axis_broadcaster_0/M00_AXIS] [get_bd_intf_pins lowlevel_dac_intfc_0/data_in]
-  connect_bd_intf_net -intf_net axis_broadcaster_0_M01_AXIS [get_bd_intf_pins axis_broadcaster_0/M01_AXIS] [get_bd_intf_pins axi_fifo_mm_s_0/AXI_STR_RXD]
+  connect_bd_intf_net -intf_net axis_broadcaster_0_M01_AXIS [get_bd_intf_ports M01_AXIS_0] [get_bd_intf_pins axis_broadcaster_0/M01_AXIS]
   connect_bd_intf_net -intf_net full_radio_0_m_axis [get_bd_intf_pins full_radio_0/m_axis] [get_bd_intf_pins axis_broadcaster_0/S_AXIS]
 connect_bd_intf_net -intf_net [get_bd_intf_nets full_radio_0_m_axis] [get_bd_intf_pins full_radio_0/m_axis] [get_bd_intf_pins system_ila_0/SLOT_0_AXIS]
   connect_bd_intf_net -intf_net processing_system7_0_DDR [get_bd_intf_ports DDR] [get_bd_intf_pins processing_system7_0/DDR]
@@ -645,6 +678,7 @@ connect_bd_intf_net -intf_net [get_bd_intf_nets full_radio_0_m_axis] [get_bd_int
 connect_bd_intf_net -intf_net [get_bd_intf_nets ps7_0_axi_periph_M00_AXI] [get_bd_intf_pins full_radio_0/S00_AXI] [get_bd_intf_pins system_ila_0/SLOT_1_AXI]
   connect_bd_intf_net -intf_net ps7_0_axi_periph_M01_AXI [get_bd_intf_pins ps7_0_axi_periph/M01_AXI] [get_bd_intf_pins axi_fifo_mm_s_0/S_AXI]
 connect_bd_intf_net -intf_net [get_bd_intf_nets ps7_0_axi_periph_M01_AXI] [get_bd_intf_pins ps7_0_axi_periph/M01_AXI] [get_bd_intf_pins system_ila_0/SLOT_2_AXI]
+  connect_bd_intf_net -intf_net ps7_0_axi_periph_M02_AXI [get_bd_intf_pins ps7_0_axi_periph/M02_AXI] [get_bd_intf_pins axi_gpio_0/S_AXI]
 
   # Create port connections
   connect_bd_net -net axi_str_rxd_tlast_0_1  [get_bd_ports axi_str_rxd_tlast_0] \
@@ -672,7 +706,9 @@ connect_bd_intf_net -intf_net [get_bd_intf_nets ps7_0_axi_periph_M01_AXI] [get_b
   [get_bd_pins rst_ps7_0_125M/ext_reset_in] \
   [get_bd_pins rst_clk125_125M/ext_reset_in]
   connect_bd_net -net rst_clk125_125M_peripheral_aresetn  [get_bd_pins rst_clk125_125M/peripheral_aresetn] \
-  [get_bd_pins ps7_0_axi_periph/M01_ARESETN]
+  [get_bd_pins axi_gpio_0/s_axi_aresetn] \
+  [get_bd_pins ps7_0_axi_periph/M01_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M02_ARESETN]
   connect_bd_net -net rst_ps7_0_125M_peripheral_aresetn  [get_bd_pins rst_ps7_0_125M/peripheral_aresetn] \
   [get_bd_pins ps7_0_axi_periph/ARESETN] \
   [get_bd_pins ps7_0_axi_periph/S00_ARESETN] \
@@ -683,20 +719,23 @@ connect_bd_intf_net -intf_net [get_bd_intf_nets ps7_0_axi_periph_M01_AXI] [get_b
   [get_bd_pins system_ila_0/clk] \
   [get_bd_pins xpm_cdc_gen_0/dest_clk] \
   [get_bd_pins full_radio_0/s00_axi_aclk] \
-  [get_bd_pins axis_broadcaster_0/aclk] \
   [get_bd_pins axi_fifo_mm_s_0/s_axi_aclk] \
   [get_bd_pins ps7_0_axi_periph/M01_ACLK] \
-  [get_bd_pins rst_clk125_125M/slowest_sync_clk]
+  [get_bd_pins rst_clk125_125M/slowest_sync_clk] \
+  [get_bd_pins ps7_0_axi_periph/M02_ACLK] \
+  [get_bd_pins axis_broadcaster_0/aclk] \
+  [get_bd_pins axi_gpio_0/s_axi_aclk]
   connect_bd_net -net xpm_cdc_gen_0_dest_rst_out  [get_bd_pins xpm_cdc_gen_0/dest_rst_out] \
   [get_bd_pins ps7_0_axi_periph/M00_ARESETN] \
   [get_bd_pins system_ila_0/resetn] \
   [get_bd_pins lowlevel_dac_intfc_0/resetn] \
   [get_bd_pins full_radio_0/s00_axi_aresetn] \
-  [get_bd_pins axis_broadcaster_0/aresetn] \
-  [get_bd_pins axi_fifo_mm_s_0/s_axi_aresetn]
+  [get_bd_pins axi_fifo_mm_s_0/s_axi_aresetn] \
+  [get_bd_pins axis_broadcaster_0/aresetn]
   
   # Create address segments
   assign_bd_address -offset 0x43C10000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_fifo_mm_s_0/S_AXI/Mem0] -force
+  assign_bd_address -offset 0x41200000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_0/S_AXI/Reg] -force
   assign_bd_address -offset 0x43C00000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs full_radio_0/S00_AXI/S00_AXI_reg] -force
 
 

@@ -10,6 +10,13 @@
 #define RADIO_TUNER_TIMER_REG_OFFSET 3
 #define RADIO_PERIPH_ADDRESS 0x43c00000
 
+#define XLLF_RDFR_OFFSET 6  /**< Receive Reset */
+#define XLLF_RDFO_OFFSET 7  /**< Receive Occupancy */
+#define XLLF_RDFD_OFFSET 8  /**< Receive Data */
+#define FIFO_BASEADDR 0x43c10000
+
+#define ENABLE_FIFO_ADDRESS 0x41200000
+
 // the below code uses a device called /dev/mem to get a pointer to a physical
 // address.  We will use this pointer to read/write the custom peripheral
 volatile unsigned int * get_a_pointer(unsigned int phys_addr)
@@ -74,9 +81,15 @@ int main()
 {
     // first, get a pointer to the peripheral base address using /dev/mem and the function mmap
     volatile unsigned int *my_periph = get_a_pointer(RADIO_PERIPH_ADDRESS);	
+    volatile unsigned int *fifo_periph = get_a_pointer(FIFO_BASEADDR);
+    volatile unsigned int *enable_udp = get_a_pointer(ENABLE_FIFO_ADDRESS);	
 
     printf("\r\n\r\n\r\nLab 10 Elhyanah Desir - Custom Peripheral Demonstration\n\r");
+
     *(my_periph+RADIO_TUNER_CONTROL_REG_OFFSET) = 0; // make sure radio isn't in reset
+    *(enable_udp) = 0;                      // Disable Data from flowing to FIFO
+    *(fifo_periph+XLLF_RDFR_OFFSET) = 0xA5; // Reset FIFO
+    
     printf("Tuning Radio to 30MHz\n\r");
     radioTuner_tuneRadio(my_periph,30e6);
     printf("Playing Tune at near 30MHz\r\n");
